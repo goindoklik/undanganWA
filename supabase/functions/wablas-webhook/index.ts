@@ -1,8 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
-import { Resvg } from "npm:@resvg/resvg-js@2.6.2";
-import { PNG } from "npm:pngjs@7.0.0";
-import jpeg from "npm:jpeg-js@0.4.4";
-import { Buffer } from "node:buffer";
+import { Resvg, initWasm } from "npm:@resvg/resvg-wasm@2.6.2";
+
+const resvgWasmUrl = new URL("index_bg.wasm", import.meta.resolve("npm:@resvg/resvg-wasm@2.6.2"));
+await initWasm(await Deno.readFile(resvgWasmUrl));
 
 type WablasPayload = {
   id?: string;
@@ -131,9 +131,7 @@ function createTicketPng(name: string, phone: string, address: string, registrat
     <text x="992" y="680" fill="#ffe27b" font-family="Arial,sans-serif" font-size="17" font-weight="900" text-anchor="middle">TIKET RESMI</text>
     <text x="992" y="706" fill="#fff" font-family="Arial,sans-serif" font-size="14" text-anchor="middle">Simpan untuk check-in</text>
   </svg>`;
-  const pngBytes = new Resvg(svg).render().asPng();
-  const bitmap = PNG.sync.read(Buffer.from(pngBytes));
-  return jpeg.encode({ data: bitmap.data, width: bitmap.width, height: bitmap.height }, 90).data;
+  return new Resvg(svg, { font: { loadSystemFonts: false, defaultFontFamily: "Arial" } }).render().asPng();
 }
 
 async function sendImage(phone: string, imageUrl: string, caption: string, refId: string) {
@@ -246,9 +244,9 @@ Deno.serve(async (req) => {
 
       const ticketBytes = createTicketPng(name, whatsapp, address, registrationNo, inviter);
       if (ticketBytes.byteLength > 2 * 1024 * 1024) throw new Error("Ukuran tiket melebihi batas Wablas 2 MB");
-      const ticketPath = `tickets/${registrationNo}.jpg`;
+      const ticketPath = `tickets/${registrationNo}.png`;
       const { error: uploadError } = await db.storage.from("undangan-assets").upload(ticketPath, ticketBytes, {
-        contentType: "image/jpeg",
+        contentType: "image/png",
         upsert: false,
       });
       if (uploadError) throw new Error("Gagal menyimpan file tiket");
