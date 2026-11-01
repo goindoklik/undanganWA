@@ -79,7 +79,10 @@ function xml(value: string) {
 }
 
 function createTicketPng(name: string, phone: string, address: string, registrationNo: string, inviter: string, eventTitle: string, eventDate: string, venue: string) {
-  const short = (value: string, max: number) => xml(value.length > max ? value.slice(0, max - 1) + "…" : value);\n  const date = new Date(eventDate);\n  const dateLabel = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "2-digit", month: "long", year: "numeric", timeZone: "Asia/Jakarta" }).format(date);\n  const timeLabel = new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jakarta" }).format(date) + " WIB";
+  const short = (value: string, max: number) => xml(value.length > max ? value.slice(0, max - 1) + "…" : value);
+  const date = new Date(eventDate);
+  const dateLabel = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "2-digit", month: "long", year: "numeric", timeZone: "Asia/Jakarta" }).format(date);
+  const timeLabel = new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jakarta" }).format(date) + " WIB";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
     <defs>
       <linearGradient id="navy" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#061329"/><stop offset=".55" stop-color="#102b55"/><stop offset="1" stop-color="#061329"/></linearGradient>
@@ -273,7 +276,9 @@ Deno.serve(async (req) => {
       }).select("id").single();
       if (insertError || !saved) throw new Error("Gagal menyimpan registrasi");
 
-      const { data: event, error: eventError } = await db.from("invite_campaigns").select("event_title,name,event_date,venue").eq("id", conversation.campaign_id).maybeSingle();\n      if (eventError || !event?.event_date || !event?.venue) throw new Error("Data acara untuk tiket tidak ditemukan atau belum lengkap");\n      const ticketBytes = createTicketPng(name, whatsapp, address, registrationNo, inviter, event.event_title || event.name || "Undangan Acara", event.event_date, event.venue);
+      const { data: event, error: eventError } = await db.from("invite_campaigns").select("event_title,name,event_date,venue").eq("id", conversation.campaign_id).maybeSingle();
+      if (eventError || !event?.event_date || !event?.venue) throw new Error("Data acara untuk tiket tidak ditemukan atau belum lengkap");
+      const ticketBytes = createTicketPng(name, whatsapp, address, registrationNo, inviter, event.event_title || event.name || "Undangan Acara", event.event_date, event.venue);
       if (ticketBytes.byteLength > 2 * 1024 * 1024) throw new Error("Ukuran tiket melebihi batas Wablas 2 MB");
       const ticketPath = `tickets/${registrationNo}.png`;
       const { error: uploadError } = await db.storage.from("undangan-assets").upload(ticketPath, ticketBytes, {
