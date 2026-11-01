@@ -36,13 +36,13 @@ function renderShell() {
   app.innerHTML = `
   <div class="layout">
     <aside class="sidebar"><div class="brand"><span class="brand-mark small">UW</span><span>Undangan WA</span></div>
-      <div class="side-label">MENU UTAMA</div><button class="nav active" data-view="dashboard">▦ <span>Dashboard</span></button>
+      <div class="side-label">MENU UTAMA</div><button class="nav active" data-view="dashboard">▦ <span>Data Undangan</span></button>
       <button class="nav" data-view="registrations">▤ <span>Data Registrasi</span></button>
       <button class="nav" data-view="invitation">✉ <span>Undangan</span></button>
       <button class="nav" data-view="campaigns">▧ <span>Kampanye Undangan</span></button>
       <div class="side-bottom"><div class="muted tiny">${esc(currentUser?.email)}</div><button id="logout" class="nav">↪ <span>Keluar</span></button></div>
     </aside>
-    <main class="content"><header class="topbar"><div><p class="eyebrow">PANEL ADMINISTRATOR</p><h1 id="page-title">Dashboard</h1></div><div class="avatar">A</div></header><section id="view"></section></main>
+    <main class="content"><header class="topbar"><div><p class="eyebrow">PANEL ADMINISTRATOR</p><h1 id="page-title">Data Undangan</h1></div><div class="avatar">A</div></header><section id="view"></section></main>
   </div>`;
   document.querySelector("#logout").onclick = async () => { await supabase.auth.signOut(); renderLogin(); };
   document.querySelectorAll(".nav[data-view]").forEach(b => b.onclick = () => showView(b.dataset.view));
@@ -150,7 +150,7 @@ function campaignsView() {
 
 async function showView(view) {
   document.querySelectorAll(".nav[data-view]").forEach(b => b.classList.toggle("active", b.dataset.view === view));
-  const title = {dashboard:"Dashboard",registrations:"Data Registrasi",invitation:"Undangan",campaigns:"Kampanye Undangan"}[view];
+  const title = {dashboard:"Data Undangan",registrations:"Data Registrasi",invitation:"Undangan",campaigns:"Kampanye Undangan"}[view];
   document.querySelector("#page-title").textContent = title;
   const target = document.querySelector("#view");
   target.innerHTML = '<div class="loading">Memuat data...</div>';
