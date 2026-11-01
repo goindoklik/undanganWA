@@ -95,6 +95,8 @@ async function createTicketPng(name: string, phone: string, address: string, reg
   const short = (value: string, max: number) => xml(value.length > max ? value.slice(0, max - 1) + "…" : value);
   const date = new Date(eventDate);
   const dateLabel = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "2-digit", month: "long", year: "numeric", timeZone: "Asia/Jakarta" }).format(date);
+  // Format tanggal tiket dibuat ringkas agar selalu muat di kolom tanggal.
+  const ticketDateLabel = new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Jakarta" }).format(date).toLocaleUpperCase("id-ID");
   const timeLabel = new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jakarta" }).format(date) + " WIB";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
     <defs>
@@ -123,7 +125,7 @@ async function createTicketPng(name: string, phone: string, address: string, reg
     <rect x="55" y="460" width="710" height="132" rx="24" fill="#07162d" stroke="url(#gold)" stroke-width="6"/>
     <path d="M290 478V574M520 478V574" stroke="#e7c65d" stroke-width="3"/>
     <text x="85" y="510" fill="#ffe27b" font-family="Poppins" font-size="18" font-weight="700">TANGGAL</text>
-    <text x="85" y="550" fill="#fff" font-family="Poppins" font-size="27" font-weight="900">${short(dateLabel.toLocaleUpperCase("id-ID"), 24)}</text>
+    <text x="85" y="550" fill="#fff" font-family="Poppins" font-size="27" font-weight="900">${short(ticketDateLabel, 14)}</text>
     <text x="320" y="510" fill="#ffe27b" font-family="Poppins" font-size="18" font-weight="700">PUKUL</text>
     <text x="320" y="550" fill="#fff" font-family="Poppins" font-size="30" font-weight="900">${short(timeLabel, 14)}</text>
     <text x="550" y="510" fill="#ffe27b" font-family="Poppins" font-size="18" font-weight="700">TEMPAT</text>
