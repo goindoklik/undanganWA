@@ -210,6 +210,20 @@ async function buildInvitationDataUrl(event) {
   ctx.font = "700 " + Math.round(21 * sx) + "px Poppins, Arial, sans-serif";
   ctx.fillText(timeText, 548 * sx, 750 * sy, 145 * sx);
 
+  // Kolom tempat: isi area di bawah label TEMPAT, di sisi kanan ikon lokasi.
+  const venueText = String(event.venue || event.event_location || event.location || "").trim();
+  if (venueText) {
+    const venueX = 825 * sx;
+    const venueMaxWidth = 255 * sx;
+    let venueFont = Math.round(19 * sx);
+    ctx.font = "700 " + venueFont + "px Poppins, Arial, sans-serif";
+    while (ctx.measureText(venueText).width > venueMaxWidth && venueFont > Math.round(13 * sx)) {
+      venueFont -= 1;
+      ctx.font = "700 " + venueFont + "px Poppins, Arial, sans-serif";
+    }
+    ctx.fillText(venueText, venueX, 750 * sy, venueMaxWidth);
+  }
+
   ctx.shadowBlur = 0;
   return canvas.toDataURL("image/png");
 }
