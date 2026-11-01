@@ -38,7 +38,8 @@ function renderShell() {
     <aside class="sidebar"><div class="brand"><span class="brand-mark small">UW</span><span>Undangan WA</span></div>
       <div class="side-label">MENU UTAMA</div><button class="nav active" data-view="dashboard">▦ <span>Dashboard</span></button>
       <button class="nav" data-view="registrations">▤ <span>Data Registrasi</span></button>
-      <button class="nav" data-view="campaigns">✉ <span>Undangan Acara</span></button>
+      <button class="nav" data-view="invitation">✉ <span>Undangan</span></button>
+      <button class="nav" data-view="campaigns">▧ <span>Kampanye Undangan</span></button>
       <div class="side-bottom"><div class="muted tiny">${esc(currentUser?.email)}</div><button id="logout" class="nav">↪ <span>Keluar</span></button></div>
     </aside>
     <main class="content"><header class="topbar"><div><p class="eyebrow">PANEL ADMINISTRATOR</p><h1 id="page-title">Dashboard</h1></div><div class="avatar">A</div></header><section id="view"></section></main>
@@ -89,6 +90,59 @@ function registrationsView() {
   <div id="registration-table">${table(registrations)}</div></section>`;
 }
 
+async function invitationView() {
+  const { data, error } = await supabase.from("invite_campaigns")
+    .select("id,name,event_title,event_date,venue")
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  const eventDate = data?.event_date ? new Date(data.event_date) : null;
+  const dateValue = eventDate ? new Date(eventDate.getTime() - eventDate.getTimezoneOffset() * 60000).toISOString().slice(0,10) : "";
+  const timeValue = eventDate ? new Date(eventDate.getTime() - eventDate.getTimezoneOffset() * 60000).toISOString().slice(11,16) : "";
+  return `<section class="panel">
+    <div class="panel-head"><div><h2>Informasi Undangan</h2><p class="muted">Atur jadwal dan lokasi acara yang ditampilkan pada undangan.</p></div></div>
+    <form id="invitation-form" class="settings-form">
+      <label>Waktu Acara<input class="search" style="margin:8px 0 16px" type="date" name="event_date" value="${esc(dateValue)}" required></label>
+      <label>Pukul<input class="search" style="margin:8px 0 16px" type="time" name="event_time" value="${esc(timeValue)}" required></label>
+      <label>Tempat<input class="search" style="margin:8px 0 16px" type="text" name="venue" value="${esc(data?.venue || "")}" placeholder="Masukkan tempat acara" required></label>
+      <button class="primary" type="submit">Simpan Informasi Undangan</button>
+      <div id="invitation-feedback" aria-live="polite"></div>
+    </form>
+  </section>`;
+}
+
+async function saveInvitation(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const fd = new FormData(form);
+  const eventDate = String(fd.get("event_date") || "");
+  const eventTime = String(fd.get("event_time") || "");
+  const venue = String(fd.get("venue") || "").trim();
+  const feedback = document.querySelector("#invitation-feedback");
+  if (!eventDate || !eventTime || !venue) {
+    feedback.innerHTML = '<div class="notice error">Lengkapi waktu acara, pukul, dan tempat.</div>';
+    return;
+  }
+  const eventTimestamp = new Date(`${eventDate}T${eventTime}:00+07:00`).toISOString();
+  const { data: current, error: readError } = await supabase.from("invite_campaigns")
+    .select("id").eq("is_active", true).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (readError) {
+    feedback.innerHTML = '<div class="notice error">Gagal membaca pengaturan undangan.</div>';
+    return;
+  }
+  const values = { name: "Undangan PilotX", event_title: "Undangan Acara", event_date: eventTimestamp, venue };
+  const result = current?.id
+    ? await supabase.from("invite_campaigns").update(values).eq("id", current.id)
+    : await supabase.from("invite_campaigns").insert(values);
+  if (result.error) {
+    feedback.innerHTML = '<div class="notice error">Gagal menyimpan. Periksa kebijakan akses tabel invite_campaigns.</div>';
+    return;
+  }
+  feedback.innerHTML = '<div class="notice">Informasi undangan berhasil disimpan.</div>';
+}
+
 function campaignsView() {
   return `<section class="panel"><h2>Pengaturan Undangan</h2><p class="muted">Kelola kampanye dan file undangan melalui tabel Supabase. Form pengelolaan kampanye akan diaktifkan pada tahap berikutnya.</p>
   <div class="notice">Backend registrasi dan webhook disiapkan. Untuk mengirim undangan massal, kredensial Wablas dan desain JPG perlu dikonfigurasi terlebih dahulu.</div></section>`;
@@ -96,13 +150,14 @@ function campaignsView() {
 
 async function showView(view) {
   document.querySelectorAll(".nav[data-view]").forEach(b => b.classList.toggle("active", b.dataset.view === view));
-  const title = {dashboard:"Dashboard",registrations:"Data Registrasi",campaigns:"Undangan Acara"}[view];
+  const title = {dashboard:"Dashboard",registrations:"Data Registrasi",invitation:"Undangan",campaigns:"Kampanye Undangan"}[view];
   document.querySelector("#page-title").textContent = title;
   const target = document.querySelector("#view");
   target.innerHTML = '<div class="loading">Memuat data...</div>';
   try {
     await loadRegistrations();
-    target.innerHTML = view === "dashboard" ? dashboardView() : view === "registrations" ? registrationsView() : campaignsView();
+    target.innerHTML = view === "dashboard" ? dashboardView() : view === "registrations" ? registrationsView() : view === "invitation" ? await invitationView() : campaignsView();
+    if (view === "invitation") document.querySelector("#invitation-form").addEventListener("submit", saveInvitation);
     if (view === "dashboard") document.querySelector("#all-reg").onclick = () => showView("registrations");
     if (view === "registrations") {
       document.querySelector("#search").oninput = e => {
