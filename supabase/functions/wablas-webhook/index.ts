@@ -332,24 +332,24 @@ Deno.serve(async(req)=>{
       return json({accepted:true,state:"await_event_format"});
     }
     if(normalized==="3"){
-      const {data:event,error}=await db.from("invite_campaigns").select("id,event_title,name,event_date,venue,invitation_image_url").eq("is_active",true).gte("event_date",now).order("event_date",{ascending:true}).limit(1).maybeSingle();
+      const {data:events,error}=await db.from("invite_campaigns")
+        .select("id,event_title,name,event_date")
+        .eq("is_active",true)
+        .gte("event_date",now)
+        .order("event_date",{ascending:true});
       if(error) throw error;
-      if(!event){await saveState("idle");await sendText(phone,"Belum ada undangan acara yang akan berlangsung.");return json({accepted:true,event_found:false});}
-      await saveState("idle",event.id);
-      try{
-        const templateUrl="https://raw.githubusercontent.com/goindoklik/undanganWA/main/Gambar/Undangan.png";
-        const png=await createInvitationImage(templateUrl,event.event_title||event.name,dateLabel(event.event_date),timeLabel(event.event_date),event.venue);
-        const path="event-invitations/"+event.id+"/resend-"+Date.now()+".png";
-        const {error:uploadError}=await db.storage.from("undangan-assets").upload(path,png,{contentType:"image/png",upsert:false});
-        if(uploadError) throw uploadError;
-        const {data:publicImage}=db.storage.from("undangan-assets").getPublicUrl(path);
-        await sendImage(phone,publicImage.publicUrl,"UNDANGAN ACARA\\n"+(event.event_title||event.name),"event-resend-"+event.id+"-"+Date.now());
-        return json({accepted:true,event_id:event.id,invitation_sent:true});
-      }catch(e){
-        console.error("RESEND_EVENT_INVITATION_FAILED",e instanceof Error?e.message:"unknown");
-        await sendText(phone,"Undangan acara belum berhasil dikirim. Silakan coba kembali beberapa saat lagi.");
-        return json({accepted:true,event_id:event.id,invitation_sent:false});
+      if(!events||events.length===0){
+        await saveState("idle");
+        await sendText(phone,"Belum ada undangan acara yang akan berlangsung.");
+        return json({accepted:true,event_found:false});
       }
+      await saveState("idle",events[0].id);
+      const lines=events.map((event,index)=>
+        (index+1)+". "+(event.event_title||event.name)+"\\nhttps://undanganwa.pages.dev/undangan/"+event.id
+      );
+      const message="Silakan Download Undangan:\\n\\n"+lines.join("\\n\\n");
+      await sendText(phone,message);
+      return json({accepted:true,event_count:events.length,invitation_links_sent:true});
     }
     if(normalized==="4"){
       const {data:event,error}=await db.from("invite_campaigns").select("id,event_title,name").eq("is_active",true).gte("event_date",now).order("event_date",{ascending:true}).limit(1).maybeSingle();
