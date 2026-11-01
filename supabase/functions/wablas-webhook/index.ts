@@ -3,6 +3,19 @@ import { Resvg, initWasm } from "npm:@resvg/resvg-wasm@2.6.2";
 
 const resvgWasmUrl = new URL("index_bg.wasm", import.meta.resolve("npm:@resvg/resvg-wasm@2.6.2"));
 await initWasm(await Deno.readFile(resvgWasmUrl));
+let poppinsFontBuffersPromise: Promise<Uint8Array[]> | null = null;
+async function getPoppinsFontBuffers(): Promise<Uint8Array[]> {
+  if (!poppinsFontBuffersPromise) {
+    poppinsFontBuffersPromise = Promise.all(["Regular","Medium","SemiBold","Bold","ExtraBold","Black"].map(async (weight) => {
+      const response = await fetch("https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-" + weight + ".ttf");
+      if (!response.ok) throw new Error("Gagal memuat font Poppins " + weight + ": HTTP " + response.status);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.length < 10000) throw new Error("File font Poppins tidak valid: " + weight);
+      return bytes;
+    })).catch((error) => { poppinsFontBuffersPromise = null; throw error; });
+  }
+  return await poppinsFontBuffersPromise;
+}
 
 type WablasPayload = {
   id?: string;
@@ -78,7 +91,7 @@ function xml(value: string) {
   return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]!));
 }
 
-function createTicketPng(name: string, phone: string, address: string, registrationNo: string, inviter: string, eventTitle: string, eventDate: string, venue: string) {
+async function createTicketPng(name: string, phone: string, address: string, registrationNo: string, inviter: string, eventTitle: string, eventDate: string, venue: string) {
   const short = (value: string, max: number) => xml(value.length > max ? value.slice(0, max - 1) + "…" : value);
   const date = new Date(eventDate);
   const dateLabel = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "2-digit", month: "long", year: "numeric", timeZone: "Asia/Jakarta" }).format(date);
@@ -97,51 +110,54 @@ function createTicketPng(name: string, phone: string, address: string, registrat
     <path d="M35 145L390 25H780L520 155Z" fill="#1d4e91" opacity=".2"/>
     <g opacity=".45" fill="#5fa7ff"><circle cx="710" cy="80" r="3"/><circle cx="770" cy="110" r="2"/><circle cx="820" cy="60" r="3"/><circle cx="890" cy="130" r="2"/><circle cx="650" cy="155" r="2"/></g>
     <path d="M700 165L790 30L820 165L920 40L900 190L1040 85L960 220Z" fill="#1674e9" opacity=".15"/>
-    <text x="72" y="104" fill="#fff" font-family="Arial,sans-serif" font-size="72" font-weight="900" font-style="italic">Pilot<tspan fill="url(#gold)">X</tspan></text>
-    <text x="78" y="139" fill="#e8edf8" font-family="Arial,sans-serif" font-size="16" font-weight="700" letter-spacing="4">BERSAMA KITA BISA LEBIH SUKSES</text>
-    <text x="1090" y="72" fill="#fff0a4" font-family="Arial,sans-serif" font-size="25" font-style="italic" text-anchor="end">Saatnya Bersama PilotX</text>
+    <text x="72" y="104" fill="#fff" font-family="Poppins" font-size="72" font-weight="900" font-style="italic">Pilot<tspan fill="url(#gold)">X</tspan></text>
+    <text x="78" y="139" fill="#e8edf8" font-family="Poppins" font-size="16" font-weight="700" letter-spacing="4">BERSAMA KITA BISA LEBIH SUKSES</text>
+    <text x="1090" y="72" fill="#fff0a4" font-family="Poppins" font-size="25" font-style="italic" text-anchor="end">Saatnya Bersama PilotX</text>
     <path d="M70 188L735 188L770 230L735 272H70L35 230Z" fill="#050d1e" stroke="url(#gold)" stroke-width="7"/>
-    <text x="400" y="244" fill="url(#gold)" font-family="Georgia,serif" font-size="65" font-weight="900" text-anchor="middle">UNDANGAN BISNIS</text>
+    <text x="400" y="244" fill="url(#gold)" font-family="Poppins" font-size="65" font-weight="900" text-anchor="middle">UNDANGAN BISNIS</text>
     <path d="M92 290H710" stroke="url(#gold)" stroke-width="2"/>
     <path d="M120 300L690 300L665 352L95 352Z" fill="url(#red)"/>
-    <text x="390" y="337" fill="#fff" font-family="Arial,sans-serif" font-size="31" font-weight="900" font-style="italic" text-anchor="middle">ACARA OFFLINE BESAR</text>
-    <text x="390" y="397" fill="#fff" font-family="Arial,sans-serif" font-size="24" font-weight="700" text-anchor="middle">Saatnya Bergabung, Bangun Jaringan,</text>
-    <text x="390" y="428" fill="#fff" font-family="Arial,sans-serif" font-size="24" font-weight="700" text-anchor="middle">Raih Kesempatan Tanpa Batas!</text>
+    <text x="390" y="337" fill="#fff" font-family="Poppins" font-size="31" font-weight="900" font-style="italic" text-anchor="middle">ACARA OFFLINE BESAR</text>
+    <text x="390" y="397" fill="#fff" font-family="Poppins" font-size="24" font-weight="700" text-anchor="middle">Saatnya Bergabung, Bangun Jaringan,</text>
+    <text x="390" y="428" fill="#fff" font-family="Poppins" font-size="24" font-weight="700" text-anchor="middle">Raih Kesempatan Tanpa Batas!</text>
     <rect x="55" y="460" width="710" height="132" rx="24" fill="#07162d" stroke="url(#gold)" stroke-width="6"/>
     <path d="M290 478V574M520 478V574" stroke="#e7c65d" stroke-width="3"/>
-    <text x="85" y="510" fill="#ffe27b" font-family="Arial,sans-serif" font-size="18" font-weight="700">TANGGAL</text>
-    <text x="85" y="550" fill="#fff" font-family="Arial,sans-serif" font-size="27" font-weight="900">${short(dateLabel.toLocaleUpperCase("id-ID"), 24)}</text>
-    <text x="320" y="510" fill="#ffe27b" font-family="Arial,sans-serif" font-size="18" font-weight="700">PUKUL</text>
-    <text x="320" y="550" fill="#fff" font-family="Arial,sans-serif" font-size="30" font-weight="900">${short(timeLabel, 14)}</text>
-    <text x="550" y="510" fill="#ffe27b" font-family="Arial,sans-serif" font-size="18" font-weight="700">TEMPAT</text>
-    <text x="550" y="550" fill="#fff" font-family="Arial,sans-serif" font-size="24" font-weight="900">${short(venue.toLocaleUpperCase("id-ID"), 22)}</text>
-    <text x="78" y="640" fill="#fff" font-family="Arial,sans-serif" font-size="21">Kami mengundang Anda untuk hadir dalam acara besar</text>
-    <text x="78" y="672" fill="#fff" font-family="Arial,sans-serif" font-size="21">offline PilotX. Perluas jaringan, tambah wawasan,</text>
-    <text x="78" y="704" fill="#fff" font-family="Arial,sans-serif" font-size="21">dan raih peluang bisnis yang lebih besar.</text>
-    <text x="78" y="750" fill="#ffe27b" font-family="Arial,sans-serif" font-size="20" font-style="italic">Bersama PilotX — Kita tumbuh, kita maju, kita sukses!</text>
+    <text x="85" y="510" fill="#ffe27b" font-family="Poppins" font-size="18" font-weight="700">TANGGAL</text>
+    <text x="85" y="550" fill="#fff" font-family="Poppins" font-size="27" font-weight="900">${short(dateLabel.toLocaleUpperCase("id-ID"), 24)}</text>
+    <text x="320" y="510" fill="#ffe27b" font-family="Poppins" font-size="18" font-weight="700">PUKUL</text>
+    <text x="320" y="550" fill="#fff" font-family="Poppins" font-size="30" font-weight="900">${short(timeLabel, 14)}</text>
+    <text x="550" y="510" fill="#ffe27b" font-family="Poppins" font-size="18" font-weight="700">TEMPAT</text>
+    <text x="550" y="550" fill="#fff" font-family="Poppins" font-size="24" font-weight="900">${short(venue.toLocaleUpperCase("id-ID"), 22)}</text>
+    <text x="78" y="640" fill="#fff" font-family="Poppins" font-size="21">Kami mengundang Anda untuk hadir dalam acara besar</text>
+    <text x="78" y="672" fill="#fff" font-family="Poppins" font-size="21">offline PilotX. Perluas jaringan, tambah wawasan,</text>
+    <text x="78" y="704" fill="#fff" font-family="Poppins" font-size="21">dan raih peluang bisnis yang lebih besar.</text>
+    <text x="78" y="750" fill="#ffe27b" font-family="Poppins" font-size="20" font-style="italic">Bersama PilotX — Kita tumbuh, kita maju, kita sukses!</text>
     <path d="M800 20V780" stroke="#ffe28a" stroke-width="5" stroke-dasharray="14 12"/>
     <rect x="825" y="35" width="335" height="730" rx="22" fill="url(#cream)" stroke="url(#gold)" stroke-width="5"/>
     <rect x="842" y="52" width="301" height="78" rx="14" fill="url(#gold)"/>
-    <text x="992" y="85" fill="#09152b" font-family="Arial,sans-serif" font-size="26" font-weight="900" text-anchor="middle">TIKET UNDANGAN</text>
-    <text x="992" y="112" fill="#09152b" font-family="Arial,sans-serif" font-size="15" font-weight="700" text-anchor="middle">${short(eventTitle, 30)}</text>
-    <text x="992" y="166" fill="#07152d" font-family="Arial,sans-serif" font-size="19" font-weight="700" text-anchor="middle">NO. REGISTER</text>
+    <text x="992" y="85" fill="#09152b" font-family="Poppins" font-size="26" font-weight="900" text-anchor="middle">TIKET UNDANGAN</text>
+    <text x="992" y="112" fill="#09152b" font-family="Poppins" font-size="15" font-weight="700" text-anchor="middle">${short(eventTitle, 30)}</text>
+    <text x="992" y="166" fill="#07152d" font-family="Poppins" font-size="19" font-weight="700" text-anchor="middle">NO. REGISTER</text>
     <rect x="850" y="178" width="285" height="52" rx="10" fill="#071a39"/>
-    <text x="992" y="214" fill="#fff" font-family="Arial,sans-serif" font-size="27" font-weight="900" text-anchor="middle">${short(registrationNo, 18)}</text>
-    <text x="858" y="274" fill="#9a6c14" font-family="Arial,sans-serif" font-size="15" font-weight="700">NAMA</text>
-    <text x="858" y="305" fill="#07152d" font-family="Arial,sans-serif" font-size="22" font-weight="900">${short(name, 25)}</text>
-    <text x="858" y="350" fill="#9a6c14" font-family="Arial,sans-serif" font-size="15" font-weight="700">NO. WHATSAPP</text>
-    <text x="858" y="379" fill="#07152d" font-family="Arial,sans-serif" font-size="20" font-weight="700">${short(phone, 22)}</text>
-    <text x="858" y="425" fill="#9a6c14" font-family="Arial,sans-serif" font-size="15" font-weight="700">ALAMAT</text>
-    <text x="858" y="454" fill="#07152d" font-family="Arial,sans-serif" font-size="18" font-weight="700">${short(address, 29)}</text>
-    <text x="858" y="505" fill="#9a6c14" font-family="Arial,sans-serif" font-size="15" font-weight="700">PENGUNDANG</text>
-    <text x="858" y="534" fill="#07152d" font-family="Arial,sans-serif" font-size="19" font-weight="700">${short(inviter, 25)}</text>
+    <text x="992" y="214" fill="#fff" font-family="Poppins" font-size="27" font-weight="900" text-anchor="middle">${short(registrationNo, 18)}</text>
+    <text x="858" y="274" fill="#9a6c14" font-family="Poppins" font-size="15" font-weight="700">NAMA</text>
+    <text x="858" y="305" fill="#07152d" font-family="Poppins" font-size="22" font-weight="900">${short(name, 25)}</text>
+    <text x="858" y="350" fill="#9a6c14" font-family="Poppins" font-size="15" font-weight="700">NO. WHATSAPP</text>
+    <text x="858" y="379" fill="#07152d" font-family="Poppins" font-size="20" font-weight="700">${short(phone, 22)}</text>
+    <text x="858" y="425" fill="#9a6c14" font-family="Poppins" font-size="15" font-weight="700">ALAMAT</text>
+    <text x="858" y="454" fill="#07152d" font-family="Poppins" font-size="18" font-weight="700">${short(address, 29)}</text>
+    <text x="858" y="505" fill="#9a6c14" font-family="Poppins" font-size="15" font-weight="700">PENGUNDANG</text>
+    <text x="858" y="534" fill="#07152d" font-family="Poppins" font-size="19" font-weight="700">${short(inviter, 25)}</text>
     <rect x="848" y="570" width="289" height="58" rx="12" fill="url(#gold)"/>
-    <text x="992" y="607" fill="#07152d" font-family="Arial,sans-serif" font-size="23" font-weight="900" text-anchor="middle">BERLAKU UNTUK 2 ORANG</text>
+    <text x="992" y="607" fill="#07152d" font-family="Poppins" font-size="23" font-weight="900" text-anchor="middle">BERLAKU UNTUK 2 ORANG</text>
     <rect x="890" y="650" width="205" height="76" rx="12" fill="#071a39"/>
-    <text x="992" y="680" fill="#ffe27b" font-family="Arial,sans-serif" font-size="17" font-weight="900" text-anchor="middle">TIKET RESMI</text>
-    <text x="992" y="706" fill="#fff" font-family="Arial,sans-serif" font-size="14" text-anchor="middle">Simpan untuk check-in</text>
+    <text x="992" y="680" fill="#ffe27b" font-family="Poppins" font-size="17" font-weight="900" text-anchor="middle">TIKET RESMI</text>
+    <text x="992" y="706" fill="#fff" font-family="Poppins" font-size="14" text-anchor="middle">Simpan untuk check-in</text>
   </svg>`;
-  return new Resvg(svg, { font: { loadSystemFonts: false, defaultFontFamily: "Arial" } }).render().asPng();
+  const fontBuffers = await getPoppinsFontBuffers();
+  const png = new Resvg(svg, { font: { fontBuffers, loadSystemFonts: false, defaultFontFamily: "Poppins" } }).render().asPng();
+  if (png.length < 1000) throw new Error("Render tiket gagal: PNG kosong");
+  return png;
 }
 
 
@@ -187,11 +203,14 @@ async function createInvitationImage(imageUrl: string, title: string, dateLabel:
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
     '<image href="' + dataUri + '" x="0" y="0" width="' + w + '" height="' + h + '" preserveAspectRatio="none"/>' +
     '<rect x="0" y="' + y + '" width="' + w + '" height="' + band + '" fill="#07152b" fill-opacity="0.90"/>' +
-    '<text x="' + x + '" y="' + (y + titleSize * 1.35) + '" fill="#ffe27b" font-family="sans-serif" font-size="' + titleSize + '" font-weight="700">' + xmlText(title.slice(0, 65)) + '</text>' +
-    '<text x="' + x + '" y="' + (y + titleSize * 2.55) + '" fill="#ffffff" font-family="sans-serif" font-size="' + detailSize + '">TANGGAL: ' + xmlText(dateLabel.slice(0, 65)) + '</text>' +
-    '<text x="' + x + '" y="' + (y + titleSize * 3.65) + '" fill="#ffffff" font-family="sans-serif" font-size="' + detailSize + '">PUKUL: ' + xmlText(timeLabel.slice(0, 35)) + '</text>' +
-    '<text x="' + x + '" y="' + (y + titleSize * 4.75) + '" fill="#ffffff" font-family="sans-serif" font-size="' + detailSize + '">TEMPAT: ' + xmlText(venue.slice(0, 85)) + '</text></svg>';
-  return new Uint8Array(new Resvg(svg, { font: { loadSystemFonts: false, defaultFontFamily: "sans-serif" } }).render().asPng());
+    '<text x="' + x + '" y="' + (y + titleSize * 1.35) + '" fill="#ffe27b" font-family="Poppins" font-size="' + titleSize + '" font-weight="700">' + xmlText(title.slice(0, 65)) + '</text>' +
+    '<text x="' + x + '" y="' + (y + titleSize * 2.55) + '" fill="#ffffff" font-family="Poppins" font-size="' + detailSize + '">TANGGAL: ' + xmlText(dateLabel.slice(0, 65)) + '</text>' +
+    '<text x="' + x + '" y="' + (y + titleSize * 3.65) + '" fill="#ffffff" font-family="Poppins" font-size="' + detailSize + '">PUKUL: ' + xmlText(timeLabel.slice(0, 35)) + '</text>' +
+    '<text x="' + x + '" y="' + (y + titleSize * 4.75) + '" fill="#ffffff" font-family="Poppins" font-size="' + detailSize + '">TEMPAT: ' + xmlText(venue.slice(0, 85)) + '</text></svg>';
+  const fontBuffers = await getPoppinsFontBuffers();
+  const png = new Resvg(svg, { font: { fontBuffers, loadSystemFonts: false, defaultFontFamily: "Poppins" } }).render().asPng();
+  if (png.length < 1000) throw new Error("Render gambar undangan gagal: PNG kosong");
+  return new Uint8Array(png);
 }
 async function sendImage(phone: string, imageUrl: string, caption: string, refId: string) {
   const token = Deno.env.get("WABLAS_TOKEN");
@@ -468,7 +487,7 @@ Deno.serve(async (req) => {
         }).select("id").single();
         if (insertError || !saved) throw new Error("Gagal menyimpan registrasi");
 
-        const ticketBytes = createTicketPng(name, registrantPhone, address, registrationNo, inviter, event.event_title || event.name || "Undangan Acara", event.event_date, event.venue);
+        const ticketBytes = await createTicketPng(name, registrantPhone, address, registrationNo, inviter, event.event_title || event.name || "Undangan Acara", event.event_date, event.venue);
         if (ticketBytes.byteLength > 2 * 1024 * 1024) throw new Error("Ukuran tiket melebihi batas Wablas 2 MB");
         const ticketPath = `tickets/${registrationNo}.png`;
         const { error: uploadError } = await db.storage.from("undangan-assets").upload(ticketPath, ticketBytes, { contentType: "image/png", upsert: false });
