@@ -144,6 +144,55 @@ function createTicketPng(name: string, phone: string, address: string, registrat
   return new Resvg(svg, { font: { loadSystemFonts: false, defaultFontFamily: "Arial" } }).render().asPng();
 }
 
+
+function base64Bytes(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+function imageDimensions(bytes: Uint8Array, contentType: string): { width: number; height: number } {
+  if (contentType.includes("png") && bytes.length > 24) {
+    const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    return { width: v.getUint32(16), height: v.getUint32(20) };
+  }
+  if (contentType.includes("jpeg") || contentType.includes("jpg")) {
+    let i = 2;
+    while (i + 9 < bytes.length) {
+      if (bytes[i] !== 255) { i++; continue; }
+      const marker = bytes[i + 1], len = (bytes[i + 2] << 8) | bytes[i + 3];
+      if ([192,193,194,195,197,198,199,201,202,203,205,206,207].includes(marker))
+        return { height: (bytes[i + 5] << 8) | bytes[i + 6], width: (bytes[i + 7] << 8) | bytes[i + 8] };
+      if (len < 2) break;
+      i += 2 + len;
+    }
+  }
+  return { width: 1200, height: 800 };
+}
+function xmlText(value: string): string {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");
+}
+async function createInvitationImage(imageUrl: string, title: string, dateLabel: string, timeLabel: string, venue: string): Promise<Uint8Array> {
+  const response = await fetch(imageUrl);
+  if (!response.ok) throw new Error("Gagal mengambil gambar undangan (HTTP " + response.status + ")");
+  const contentType = (response.headers.get("content-type") || "image/jpeg").split(";")[0].toLowerCase();
+  if (!["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(contentType)) throw new Error("Format gambar undangan harus PNG, JPG, atau WebP");
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (!bytes.length || bytes.length > 8 * 1024 * 1024) throw new Error("Ukuran gambar undangan kosong atau melebihi 8 MB");
+  const dims = imageDimensions(bytes, contentType);
+  const scale = Math.min(2400 / dims.width, 2400 / dims.height, 1);
+  const w = Math.max(320, Math.round(dims.width * scale)), h = Math.max(320, Math.round(dims.height * scale));
+  const band = Math.round(h * 0.32), titleSize = Math.max(20, Math.round(w * 0.034)), detailSize = Math.max(16, Math.round(w * 0.024));
+  const dataUri = "data:" + contentType + ";base64," + base64Bytes(bytes);
+  const x = Math.round(w * 0.05), y = h - band;
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
+    '<image href="' + dataUri + '" x="0" y="0" width="' + w + '" height="' + h + '" preserveAspectRatio="none"/>' +
+    '<rect x="0" y="' + y + '" width="' + w + '" height="' + band + '" fill="#07152b" fill-opacity="0.90"/>' +
+    '<text x="' + x + '" y="' + (y + titleSize * 1.35) + '" fill="#ffe27b" font-family="sans-serif" font-size="' + titleSize + '" font-weight="700">' + xmlText(title.slice(0, 65)) + '</text>' +
+    '<text x="' + x + '" y="' + (y + titleSize * 2.55) + '" fill="#ffffff" font-family="sans-serif" font-size="' + detailSize + '">TANGGAL: ' + xmlText(dateLabel.slice(0, 65)) + '</text>' +
+    '<text x="' + x + '" y="' + (y + titleSize * 3.65) + '" fill="#ffffff" font-family="sans-serif" font-size="' + detailSize + '">PUKUL: ' + xmlText(timeLabel.slice(0, 35)) + '</text>' +
+    '<text x="' + x + '" y="' + (y + titleSize * 4.75) + '" fill="#ffffff" font-family="sans-serif" font-size="' + detailSize + '">TEMPAT: ' + xmlText(venue.slice(0, 85)) + '</text></svg>';
+  return new Uint8Array(new Resvg(svg, { font: { loadSystemFonts: false, defaultFontFamily: "sans-serif" } }).render().asPng());
+}
 async function sendImage(phone: string, imageUrl: string, caption: string, refId: string) {
   const token = Deno.env.get("WABLAS_TOKEN");
   const secret = Deno.env.get("WABLAS_SECRET_KEY");
@@ -210,6 +259,119 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   try {
+    const inviteCommand = text.match(/^undang\s+(?:no\s*wa\s*=\s*)?([0-9+().\s-]+?)(?:\s+dari\s+([0-9+().\s-]+))?$/i);
+    if (inviteCommand) {
+      const { data: sender } = await db.from("authorized_senders")
+        .select("id,phone,display_name,is_active,daily_count,usage_date,last_command_at")
+        .eq("phone", phone).maybeSingle();
+      if (!sender || !sender.is_active) {
+        await sendText(phone, "Maaf, nomor WhatsApp Anda belum terdaftar atau sedang tidak diizinkan menggunakan perintah undangan. Hubungi admin acara.");
+        return json({ accepted: false, reason: "sender_not_authorized" });
+      }
+
+      const targetPhone = normalizePhone(inviteCommand[1]);
+      if (!/^62[0-9]{8,13}$/.test(targetPhone)) {
+        await sendText(phone, "Format nomor tujuan tidak valid. Gunakan: Undang no WA = 08xxxxxxxxxx");
+        return json({ accepted: true, invalid: "target_phone" });
+      }
+      if (targetPhone === phone) {
+        await sendText(phone, "Nomor tujuan tidak boleh sama dengan nomor pengundang.");
+        return json({ accepted: true, invalid: "same_phone" });
+      }
+
+      const now = new Date();
+      const jakartaDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+      const lastCommand = sender.last_command_at ? new Date(sender.last_command_at).getTime() : 0;
+      if (lastCommand && now.getTime() - lastCommand < 60_000) {
+        await sendText(phone, "Tunggu minimal 60 detik sebelum mengirim perintah undangan berikutnya.");
+        return json({ accepted: false, reason: "cooldown" });
+      }
+      const dailyCount = sender.usage_date === jakartaDate ? Number(sender.daily_count || 0) : 0;
+      if (dailyCount >= 5) {
+        await sendText(phone, "Batas undangan Anda hari ini sudah mencapai 5 nomor. Silakan coba kembali besok.");
+        return json({ accepted: false, reason: "daily_limit" });
+      }
+
+      const { data: campaign } = await db.from("invite_campaigns")
+        .select("id,event_title,name,event_date,venue,invitation_image_url")
+        .eq("is_active", true).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (!campaign || !campaign.invitation_image_url) {
+        await sendText(phone, "Undangan belum dapat dikirim karena data acara aktif atau gambar undangan belum tersedia. Hubungi admin.");
+        return json({ accepted: false, reason: "campaign_unavailable" });
+      }
+
+      const { data: duplicate } = await db.from("invitations").select("id")
+        .eq("campaign_id", campaign.id).eq("phone", targetPhone).maybeSingle();
+      if (duplicate) {
+        await sendText(phone, "Nomor tersebut sudah pernah menerima undangan untuk acara aktif ini.");
+        return json({ accepted: false, reason: "duplicate_target" });
+      }
+
+      const { error: insertInviteError } = await db.from("invitations").insert({
+        campaign_id: campaign.id,
+        phone: targetPhone,
+        contact_name: "",
+        inviter_name: sender.display_name,
+        status: "sending"
+      });
+      if (insertInviteError) throw new Error("Gagal mencatat undangan");
+
+      const eventDate = new Date(campaign.event_date);
+      const dateLabel = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "2-digit", month: "long", year: "numeric", timeZone: "Asia/Jakarta" }).format(eventDate);
+      const timeLabel = new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jakarta" }).format(eventDate) + " WIB";
+      const caption = "HADIR\nTIDAK HADIR";
+      try {
+        const invitationPng = await createInvitationImage(campaign.invitation_image_url, campaign.event_title || campaign.name || "UNDANGAN ACARA", dateLabel, timeLabel, campaign.venue || "-");
+        const invitationPath = "invitations/" + campaign.id + "/" + targetPhone + "-" + Date.now() + ".png";
+        const { error: invitationUploadError } = await db.storage.from("undangan-assets").upload(invitationPath, invitationPng, { contentType: "image/png", upsert: false });
+        if (invitationUploadError) throw new Error("Gagal menyimpan gambar undangan dengan detail acara");
+        const { data: invitationPublic } = db.storage.from("undangan-assets").getPublicUrl(invitationPath);
+        const sent = await sendImage(targetPhone, invitationPublic.publicUrl, caption, crypto.randomUUID());
+        const messageId = Array.isArray((sent as any).data) ? (sent as any).data[0]?.id || null : null;
+        await db.from("invitations").update({ status: "sent", sent_at: now.toISOString(), wablas_message_id: messageId })
+          .eq("campaign_id", campaign.id).eq("phone", targetPhone);
+        await db.from("authorized_senders").update({
+          daily_count: dailyCount + 1, usage_date: jakartaDate, last_command_at: now.toISOString(), updated_at: now.toISOString()
+        }).eq("id", sender.id);
+        await sendText(phone, `Undangan berhasil dikirim ke ${targetPhone}. Sisa kuota hari ini: ${4 - dailyCount} undangan.`);
+        return json({ accepted: true, invited: targetPhone, campaign_id: campaign.id });
+      } catch (sendError) {
+        await db.from("invitations").update({ status: "failed" }).eq("campaign_id", campaign.id).eq("phone", targetPhone);
+        throw sendError;
+      }
+    }
+
+    if (normalized === "hadir" || normalized === "tidak hadir") {
+      const { data: latestInvitation } = await db.from("invitations")
+        .select("id,campaign_id,status,contact_name,inviter_name")
+        .eq("phone", phone)
+        .order("sent_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!latestInvitation) {
+        await sendText(phone, "Kami belum menemukan undangan yang terkait dengan nomor ini.");
+        return json({ accepted: false, reason: "invitation_not_found" });
+      }
+
+      if (normalized === "tidak hadir") {
+        const { error: rsvpError } = await db.from("invitations")
+          .update({ status: "not_attending" }).eq("id", latestInvitation.id);
+        if (rsvpError) throw new Error("Gagal menyimpan konfirmasi ketidakhadiran");
+        await sendText(phone, "Terima kasih. Konfirmasi Anda telah kami catat: TIDAK HADIR.");
+        return json({ accepted: true, rsvp: "not_attending" });
+      }
+
+      // HADIR langsung mendaftarkan penerima undangan dan mengirim tiket gambar statis.
+      const { error: registerError } = await db.from("invitations")
+        .update({ status: "registered" }).eq("id", latestInvitation.id);
+      if (registerError) throw new Error("Gagal menyimpan status registrasi undangan");
+
+      const ticketUrl = "https://rexjmedyqrdlyeepuiax.supabase.co/storage/v1/object/public/undangan-assets/Tiket.png";
+      await sendText(phone, "Terima kasih! Konfirmasi HADIR Anda sudah tercatat dan Anda resmi terdaftar. Berikut tiket undangan Anda. Tiket berlaku untuk 2 orang.");
+      await sendImage(phone, ticketUrl, "TIKET UNDANGAN - HADIR (berlaku untuk 2 orang)", "ticket-hadir-" + latestInvitation.id);
+      return json({ accepted: true, rsvp: "registered", ticket_url: ticketUrl });
+    }
+
     if (normalized === "daftar") {
       // Associate this registration flow with the invitation/event sent to this WhatsApp number.
       const { data: sentInvitation } = await db.from("invitations")
@@ -234,7 +396,7 @@ Deno.serve(async (req) => {
         updated_at: new Date().toISOString(),
         last_message_at: new Date().toISOString(),
       });
-      await sendText(phone, "Silahkan isi\\nNama :\\nNo WA:\\nAlamat :\\nPengundang :\\n\\nBalas pesan ini dengan data lengkap Anda.");
+      await sendText(phone, "Silahkan isi\nNama :\nNo WA:\nAlamat :\nPengundang :\n\nBalas pesan ini dengan data lengkap Anda.");
       return json({ accepted: true, state: "awaiting_registration", campaign_id: campaignId });
     }
 
