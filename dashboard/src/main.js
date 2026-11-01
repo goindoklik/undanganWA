@@ -89,7 +89,7 @@ function eventsView(events) {
     ${events.map(ev => {
       const d = ev.event_date ? new Date(ev.event_date) : null;
       const count = registrations.filter(r => r.campaign_id === ev.id).length;
-      return `<tr><td><b>${esc(ev.event_title || ev.name)}</b></td><td>${d ? d.toLocaleDateString("id-ID",{dateStyle:"long",timeZone:"Asia/Jakarta"}) : "-"}</td><td>${d ? d.toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Jakarta"})+" WIB" : "-"}</td><td>${esc(ev.venue || "-")}</td><td>${count} orang</td><td><span class="status">${eventStatus(ev)}</span></td><td><button class="outline compact edit-event" data-id="${ev.id}">Edit</button> <button class="outline compact delete-event" data-id="${ev.id}" ${count ? "disabled title='Acara memiliki data registrasi'" : ""}>Hapus</button></td></tr>`;
+      return `<tr><td><b>${esc(ev.event_title || ev.name)}</b></td><td>${d ? d.toLocaleDateString("id-ID",{dateStyle:"long",timeZone:"Asia/Jakarta"}) : "-"}</td><td>${d ? d.toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Jakarta"})+" WIB" : "-"}</td><td>${esc(ev.venue || "-")}</td><td>${count} orang</td><td><span class="status">${eventStatus(ev)}</span></td><td><button class="outline compact edit-event" data-id="${ev.id}">Edit</button> <button class="outline compact delete-event" data-id="${ev.id}">Hapus</button></td></tr>`;
     }).join("")}
     </tbody></table></div>` : '<div class="empty">Belum ada acara. Klik Tambah Acara untuk membuat acara pertama.</div>'}
   </section>`;
@@ -138,17 +138,37 @@ async function saveEvent(e, eventId = null) {
 }
 
 async function deleteEvent(eventId) {
-  const hasRegistrations = registrations.some(r => r.campaign_id === eventId);
-  if (hasRegistrations) {
-    alert("Acara tidak dapat dihapus karena sudah memiliki data registrasi. Data peserta harus tetap terhubung dengan acara.");
+  const event = eventRecords.find(item => item.id === eventId);
+  const eventName = event?.event_title || event?.name || "acara ini";
+  const confirmed = confirm(`Hapus "${eventName}" beserta seluruh data registrasi peserta yang terkait? Tindakan ini tidak dapat dibatalkan.`);
+  if (!confirmed) return;
+
+  // Hapus semua registrasi berdasarkan campaign_id langsung di database,
+  // tidak bergantung pada daftar yang hanya memuat maksimal 500 baris.
+  const { error: registrationsError } = await supabase
+    .from("registrations")
+    .delete()
+    .eq("campaign_id", eventId);
+
+  if (registrationsError) {
+    console.error("Gagal menghapus registrasi acara:", registrationsError);
+    alert("Data registrasi peserta gagal dihapus. Acara tidak jadi dihapus.");
     return;
   }
-  if (!confirm("Hapus acara ini? Data undangan yang terkait tidak akan dihapus.")) return;
-  const { error } = await supabase.from("invite_campaigns").delete().eq("id", eventId);
-  if (error) {
-    alert("Acara gagal dihapus. Silakan coba kembali.");
+
+  const { error: eventError } = await supabase
+    .from("invite_campaigns")
+    .delete()
+    .eq("id", eventId);
+
+  if (eventError) {
+    console.error("Gagal menghapus acara:", eventError);
+    alert("Registrasi terkait sudah dihapus, tetapi acara gagal dihapus. Silakan coba kembali.");
+    await showView("events");
     return;
   }
+
+  alert("Acara dan seluruh data registrasi pesertanya berhasil dihapus.");
   await showView("events");
 }
 
