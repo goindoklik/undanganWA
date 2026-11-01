@@ -59,10 +59,15 @@ async function sendText(phone: string, message: string) {
     },
     body: JSON.stringify({ data: [{ phone, message, ref_id: crypto.randomUUID() }] }),
   });
-  const result = await response.json();
+  const raw = await response.text();
+  let result: Record<string, unknown> = {};
+  try { result = JSON.parse(raw); } catch { /* non-JSON response */ }
   if (!response.ok || result.status !== true) {
-    throw new Error("Wablas gagal menerima pesan");
+    const reason = typeof result.message === "string" ? result.message.slice(0, 240) : "Respons bukan JSON";
+    console.error("WABLAS_SEND_TEXT_REJECTED", JSON.stringify({ http_status: response.status, api_status: result.status ?? null, reason }));
+    throw new Error(`Wablas menolak pesan (HTTP ${response.status}): ${reason}`);
   }
+  console.log("WABLAS_SEND_TEXT_ACCEPTED", JSON.stringify({ http_status: response.status }));
   return result;
 }
 
@@ -143,8 +148,15 @@ async function sendImage(phone: string, imageUrl: string, caption: string, refId
     headers: { Authorization: `${token}.${secret}`, "Content-Type": "application/json" },
     body: JSON.stringify({ data: [{ phone, image: imageUrl, caption, ref_id: refId }] }),
   });
-  const result = await response.json();
-  if (!response.ok || result.status !== true) throw new Error("Wablas gagal menerima tiket gambar");
+  const raw = await response.text();
+  let result: Record<string, unknown> = {};
+  try { result = JSON.parse(raw); } catch { /* non-JSON response */ }
+  if (!response.ok || result.status !== true) {
+    const reason = typeof result.message === "string" ? result.message.slice(0, 240) : "Respons bukan JSON";
+    console.error("WABLAS_SEND_IMAGE_REJECTED", JSON.stringify({ http_status: response.status, api_status: result.status ?? null, reason }));
+    throw new Error(`Wablas menolak tiket gambar (HTTP ${response.status}): ${reason}`);
+  }
+  console.log("WABLAS_SEND_IMAGE_ACCEPTED", JSON.stringify({ http_status: response.status }));
   return result;
 }
 
