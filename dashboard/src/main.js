@@ -89,7 +89,7 @@ function eventsView(events) {
     ${events.map(ev => {
       const d = ev.event_date ? new Date(ev.event_date) : null;
       const count = registrations.filter(r => r.campaign_id === ev.id).length;
-      return `<tr><td><b>${esc(ev.event_title || ev.name)}</b></td><td>${d ? d.toLocaleDateString("id-ID",{dateStyle:"long",timeZone:"Asia/Jakarta"}) : "-"}</td><td>${d ? d.toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Jakarta"})+" WIB" : "-"}</td><td>${esc(ev.venue || "-")}</td><td>${count} orang</td><td><span class="status">${eventStatus(ev)}</span></td><td><a href="#" class="invitation-download" data-id="${ev.id}">Download Undangan</a> <button class="outline compact edit-event" data-id="${ev.id}">Edit</button> <button class="outline compact delete-event" data-id="${ev.id}">Hapus</button></td></tr>`;
+      return `<tr><td><b>${esc(ev.event_title || ev.name)}</b></td><td>${d ? d.toLocaleDateString("id-ID",{dateStyle:"long",timeZone:"Asia/Jakarta"}) : "-"}</td><td>${d ? d.toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Jakarta"})+" WIB" : "-"}</td><td>${esc(ev.venue || "-")}</td><td>${count} orang</td><td><span class="status">${eventStatus(ev)}</span></td><td><button class="outline compact invitation-event" data-id="${ev.id}">Undangan</button> ${ev.invitation_image_url ? `<a href="${esc(ev.invitation_image_url)}" target="_blank" rel="noopener noreferrer">${esc(ev.invitation_image_url)}</a>` : '<span class="muted">URL belum tersedia</span>'} <button class="outline compact edit-event" data-id="${ev.id}">Edit</button> <button class="outline compact delete-event" data-id="${ev.id}">Hapus</button></td></tr>`;
     }).join("")}
     </tbody></table></div>` : '<div class="empty">Belum ada acara. Klik Tambah Acara untuk membuat acara pertama.</div>'}
   </section>`;
@@ -435,28 +435,8 @@ async function showView(view) {
         document.querySelector("#event-form").addEventListener("submit", e => saveEvent(e));
         document.querySelector("#cancel-event").onclick = () => document.querySelector("#event-form-wrap").innerHTML = "";
       };
-      document.querySelectorAll(".invitation-download").forEach(link => link.onclick = async event => {
-        event.preventDefault();
-        const item = eventRecords.find(ev => ev.id === link.dataset.id);
-        if (!item) return;
-        const originalText = link.textContent;
-        link.textContent = "Menyiapkan...";
-        link.style.pointerEvents = "none";
-        try {
-          const dataUrl = await buildInvitationDataUrl(item);
-          const a = document.createElement("a");
-          a.href = dataUrl;
-          a.download = "Undangan-" + String(item.event_title || item.name || "Acara").replace(/[^a-z0-9-_]+/gi, "-") + ".png";
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-        } catch (error) {
-          console.error("Gagal mengunduh undangan:", error);
-          alert(error.message || "Gambar undangan gagal dibuat.");
-        } finally {
-          link.textContent = originalText;
-          link.style.pointerEvents = "";
-        }
+      document.querySelectorAll(".invitation-event").forEach(button => button.onclick = () => {
+        showEventInvitation(button.dataset.id);
       });
       document.querySelectorAll(".edit-event").forEach(button => button.onclick = () => {
         const event = events.find(ev => ev.id === button.dataset.id);
