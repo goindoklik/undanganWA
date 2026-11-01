@@ -51,7 +51,7 @@ async function sendText(phone: string, message: string) {
   const token = Deno.env.get("WABLAS_TOKEN");
   const secret = Deno.env.get("WABLAS_SECRET_KEY");
   if (!token || !secret) throw new Error("Wablas credentials belum dikonfigurasi");
-  const response = await fetch("https://wablas.com/api/v2/send-message", {
+  const response = await fetch("https://smg.wablas.com/api/v2/send-message", {
     method: "POST",
     headers: {
       Authorization: `${token}.${secret}`,
@@ -143,7 +143,7 @@ async function sendImage(phone: string, imageUrl: string, caption: string, refId
   const token = Deno.env.get("WABLAS_TOKEN");
   const secret = Deno.env.get("WABLAS_SECRET_KEY");
   if (!token || !secret) throw new Error("Wablas credentials belum dikonfigurasi");
-  const response = await fetch("https://wablas.com/api/v2/send-image", {
+  const response = await fetch("https://smg.wablas.com/api/v2/send-image", {
     method: "POST",
     headers: { Authorization: `${token}.${secret}`, "Content-Type": "application/json" },
     body: JSON.stringify({ data: [{ phone, image: imageUrl, caption, ref_id: refId }] }),
