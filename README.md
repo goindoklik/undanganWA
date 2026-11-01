@@ -72,8 +72,9 @@ Jangan pernah memasukkan service role key atau Wablas credentials ke Cloudflare 
 
 - Skema database dan RLS awal: tersedia.
 - Webhook inbound: tersedia untuk alur teks DAFTAR dan formulir.
+- Generator tiket JPEG otomatis: dirender setelah registrasi, disimpan ke Supabase Storage, lalu dikirim melalui endpoint Wablas V2.
 - Dashboard: login admin, statistik dasar, daftar registrasi, pencarian, export CSV.
-- Pengiriman undangan massal, pengelolaan kampanye dari dashboard, dan generator JPG tiket final masih perlu dilengkapi sebelum operasional.
+- Pengiriman undangan massal dan pengelolaan kampanye dari dashboard masih perlu dilengkapi sebelum operasional.
 - Webhook dan dashboard belum dapat diuji end-to-end sampai akses project Supabase dan kredensial Wablas dikonfigurasi.
 
 ## Batas keamanan
