@@ -202,7 +202,7 @@ async function buildInvitationDataUrl(event) {
 
   // Kolom tanggal: nama hari dan tanggal rata kiri pada satu garis awal.
   // Posisi kiri disamakan dengan tepi kiri area teks sebelumnya.
-  const dateX = 173 * sx;
+  const dateX = 171 * sx;
   ctx.font = "700 " + Math.round(19 * sx) + "px Poppins, Arial, sans-serif";
   ctx.fillText(weekday, dateX, 735 * sy, 205 * sx);
   ctx.font = "600 " + Math.round(18 * sx) + "px Poppins, Arial, sans-serif";
