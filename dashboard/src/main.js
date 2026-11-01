@@ -36,17 +36,16 @@ function renderShell() {
   app.innerHTML = `
   <div class="layout">
     <aside class="sidebar"><div class="brand"><span class="brand-mark small">UW</span><span>Undangan WA</span></div>
-      <div class="side-label">MENU UTAMA</div><button class="nav active" data-view="dashboard">▦ <span>Data Undangan</span></button>
+      <div class="side-label">MENU UTAMA</div>
+      <button class="nav active" data-view="events">▦ <span>Data Acara</span></button>
       <button class="nav" data-view="registrations">▤ <span>Data Registrasi</span></button>
-      <button class="nav" data-view="invitation">✉ <span>Undangan</span></button>
-      <button class="nav" data-view="campaigns">▧ <span>Kampanye Undangan</span></button>
       <div class="side-bottom"><div class="muted tiny">${esc(currentUser?.email)}</div><button id="logout" class="nav">↪ <span>Keluar</span></button></div>
     </aside>
-    <main class="content"><header class="topbar"><div><p class="eyebrow">PANEL ADMINISTRATOR</p><h1 id="page-title">Data Undangan</h1></div><div class="avatar">A</div></header><section id="view"></section></main>
+    <main class="content"><header class="topbar"><div><p class="eyebrow">PANEL ADMINISTRATOR</p><h1 id="page-title">Data Acara</h1></div><div class="avatar">A</div></header><section id="view"></section></main>
   </div>`;
   document.querySelector("#logout").onclick = async () => { await supabase.auth.signOut(); renderLogin(); };
   document.querySelectorAll(".nav[data-view]").forEach(b => b.onclick = () => showView(b.dataset.view));
-  showView("dashboard");
+  showView("events");
 }
 
 async function loadRegistrations() {
@@ -65,16 +64,64 @@ function stats() {
   };
 }
 
-function dashboardView() {
-  const s = stats();
-  return `<div class="stats">
-    <article class="stat"><span>Total Registrasi</span><strong>${s.total}</strong><small>Seluruh pendaftar</small></article>
-    <article class="stat"><span>Registrasi Hari Ini</span><strong>${s.today}</strong><small>Pendaftar baru</small></article>
-    <article class="stat"><span>Kuota Tamu</span><strong>${s.guests}</strong><small>2 orang per tiket</small></article>
-    <article class="stat"><span>Sudah Hadir</span><strong>${s.attended}</strong><small>Status kehadiran</small></article>
-  </div>
-  <section class="panel"><div class="panel-head"><div><h2>Registrasi Terbaru</h2><p class="muted">Daftar tamu yang baru mendaftar melalui WhatsApp.</p></div><button class="outline" id="all-reg">Lihat Semua</button></div>
-  ${table(registrations.slice(0,8))}</section>`;
+async function loadEvents() {
+  const { data, error } = await supabase.from("invite_campaigns")
+    .select("id,name,event_title,event_date,venue,is_active,created_at")
+    .order("event_date", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+function eventStatus(event) {
+  if (!event.event_date) return "Belum dijadwalkan";
+  return new Date(event.event_date).getTime() < Date.now() ? "Sudah berlangsung" : "Akan berlangsung";
+}
+
+function eventsView(events) {
+  return `<section class="panel">
+    <div class="panel-head"><div><h2>Data Acara</h2><p class="muted">Seluruh acara yang sudah dan akan berlangsung.</p></div><button class="primary compact" id="add-event">+ Tambah Acara</button></div>
+    <div id="event-form-wrap"></div>
+    ${events.length ? `<div class="table-wrap"><table><thead><tr><th>Nama Acara</th><th>Waktu Acara</th><th>Pukul</th><th>Tempat</th><th>Registrasi</th><th>Status</th></tr></thead><tbody>
+    ${events.map(ev => {
+      const d = ev.event_date ? new Date(ev.event_date) : null;
+      const count = registrations.filter(r => r.campaign_id === ev.id).length;
+      return `<tr><td><b>${esc(ev.event_title || ev.name)}</b></td><td>${d ? d.toLocaleDateString("id-ID",{dateStyle:"long",timeZone:"Asia/Jakarta"}) : "-"}</td><td>${d ? d.toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Jakarta"})+" WIB" : "-"}</td><td>${esc(ev.venue || "-")}</td><td>${count} orang</td><td><span class="status">${eventStatus(ev)}</span></td></tr>`;
+    }).join("")}
+    </tbody></table></div>` : '<div class="empty">Belum ada acara. Klik Tambah Acara untuk membuat acara pertama.</div>'}
+  </section>`;
+}
+
+function eventForm() {
+  return `<form id="event-form" class="panel" style="margin-bottom:18px">
+    <div class="panel-head"><div><h2>Tambah Acara</h2><p class="muted">Isi informasi acara yang akan disimpan.</p></div><button type="button" class="outline compact" id="cancel-event">Batal</button></div>
+    <label>Nama Acara<input class="search" name="event_title" placeholder="Contoh: Gathering PilotX" required></label>
+    <div class="stats" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+      <label>Waktu Acara<input class="search" type="date" name="event_date" required></label>
+      <label>Pukul<input class="search" type="time" name="event_time" required></label>
+    </div>
+    <label>Tempat<input class="search" name="venue" placeholder="Masukkan lokasi acara" required></label>
+    <button class="primary" type="submit">Simpan Acara</button><div id="event-feedback"></div>
+  </form>`;
+}
+
+async function saveEvent(e) {
+  e.preventDefault();
+  const fd = new FormData(e.currentTarget);
+  const event_title = String(fd.get("event_title") || "").trim();
+  const day = String(fd.get("event_date") || "");
+  const time = String(fd.get("event_time") || "");
+  const venue = String(fd.get("venue") || "").trim();
+  const feedback = document.querySelector("#event-feedback");
+  if (!event_title || !day || !time || !venue) return;
+  const event_date = new Date(`${day}T${time}:00+07:00`).toISOString();
+  const { error } = await supabase.from("invite_campaigns").insert({
+    name: event_title, event_title, event_date, venue, is_active: true
+  });
+  if (error) {
+    feedback.innerHTML = '<div class="notice error">Acara gagal disimpan. Periksa hak akses tabel acara.</div>';
+    return;
+  }
+  await showView("events");
 }
 
 function table(rows) {
@@ -84,97 +131,57 @@ function table(rows) {
   </tbody></table></div>`;
 }
 
-function registrationsView() {
-  return `<section class="panel"><div class="panel-head"><div><h2>Data Registrasi</h2><p class="muted">Maksimal 500 data terbaru ditampilkan.</p></div><button class="primary compact" id="export">Export CSV</button></div>
+function registrationsView(events) {
+  const selected = new URLSearchParams(location.hash.slice(1)).get("event") || "all";
+  const eventOptions = events.map(ev => `<option value="${ev.id}" ${selected === ev.id ? "selected" : ""}>${esc(ev.event_title || ev.name)}</option>`).join("");
+  return `<section class="panel"><div class="panel-head"><div><h2>Data Registrasi</h2><p class="muted">Pilih acara untuk melihat peserta yang mendaftar pada acara tersebut.</p></div><button class="primary compact" id="export">Export CSV</button></div>
+  <label>Filter Acara<select id="event-filter" class="search"><option value="all" ${selected === "all" ? "selected" : ""}>Semua Acara</option>${eventOptions}<option value="none" ${selected === "none" ? "selected" : ""}>Registrasi tanpa acara</option></select></label>
   <input id="search" class="search" placeholder="Cari nama, nomor WA, alamat atau nomor register...">
-  <div id="registration-table">${table(registrations)}</div></section>`;
+  <div id="registration-table">${table(filterRegistrations(selected))}</div></section>`;
 }
 
-async function invitationView() {
-  const { data, error } = await supabase.from("invite_campaigns")
-    .select("id,name,event_title,event_date,venue")
-    .eq("is_active", true)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  const eventDate = data?.event_date ? new Date(data.event_date) : null;
-  const dateValue = eventDate ? new Date(eventDate.getTime() - eventDate.getTimezoneOffset() * 60000).toISOString().slice(0,10) : "";
-  const timeValue = eventDate ? new Date(eventDate.getTime() - eventDate.getTimezoneOffset() * 60000).toISOString().slice(11,16) : "";
-  return `<section class="panel">
-    <div class="panel-head"><div><h2>Informasi Undangan</h2><p class="muted">Atur jadwal dan lokasi acara yang ditampilkan pada undangan.</p></div></div>
-    <form id="invitation-form" class="settings-form">
-      <label>Waktu Acara<input class="search" style="margin:8px 0 16px" type="date" name="event_date" value="${esc(dateValue)}" required></label>
-      <label>Pukul<input class="search" style="margin:8px 0 16px" type="time" name="event_time" value="${esc(timeValue)}" required></label>
-      <label>Tempat<input class="search" style="margin:8px 0 16px" type="text" name="venue" value="${esc(data?.venue || "")}" placeholder="Masukkan tempat acara" required></label>
-      <button class="primary" type="submit">Simpan Informasi Undangan</button>
-      <div id="invitation-feedback" aria-live="polite"></div>
-    </form>
-  </section>`;
+function filterRegistrations(eventId, query = "") {
+  return registrations.filter(r => (eventId === "all" || (eventId === "none" ? !r.campaign_id : r.campaign_id === eventId)) &&
+    [r.registration_no,r.name,r.whatsapp,r.address,r.inviter].some(v => String(v || "").toLowerCase().includes(query)));
 }
 
-async function saveInvitation(e) {
-  e.preventDefault();
-  const form = e.currentTarget;
-  const fd = new FormData(form);
-  const eventDate = String(fd.get("event_date") || "");
-  const eventTime = String(fd.get("event_time") || "");
-  const venue = String(fd.get("venue") || "").trim();
-  const feedback = document.querySelector("#invitation-feedback");
-  if (!eventDate || !eventTime || !venue) {
-    feedback.innerHTML = '<div class="notice error">Lengkapi waktu acara, pukul, dan tempat.</div>';
-    return;
-  }
-  const eventTimestamp = new Date(`${eventDate}T${eventTime}:00+07:00`).toISOString();
-  const { data: current, error: readError } = await supabase.from("invite_campaigns")
-    .select("id").eq("is_active", true).order("created_at", { ascending: false }).limit(1).maybeSingle();
-  if (readError) {
-    feedback.innerHTML = '<div class="notice error">Gagal membaca pengaturan undangan.</div>';
-    return;
-  }
-  const values = { name: "Undangan PilotX", event_title: "Undangan Acara", event_date: eventTimestamp, venue };
-  const result = current?.id
-    ? await supabase.from("invite_campaigns").update(values).eq("id", current.id)
-    : await supabase.from("invite_campaigns").insert(values);
-  if (result.error) {
-    feedback.innerHTML = '<div class="notice error">Gagal menyimpan. Periksa kebijakan akses tabel invite_campaigns.</div>';
-    return;
-  }
-  feedback.innerHTML = '<div class="notice">Informasi undangan berhasil disimpan.</div>';
-}
-
-function campaignsView() {
-  return `<section class="panel"><h2>Pengaturan Undangan</h2><p class="muted">Kelola kampanye dan file undangan melalui tabel Supabase. Form pengelolaan kampanye akan diaktifkan pada tahap berikutnya.</p>
-  <div class="notice">Backend registrasi dan webhook disiapkan. Untuk mengirim undangan massal, kredensial Wablas dan desain JPG perlu dikonfigurasi terlebih dahulu.</div></section>`;
-}
 
 async function showView(view) {
   document.querySelectorAll(".nav[data-view]").forEach(b => b.classList.toggle("active", b.dataset.view === view));
-  const title = {dashboard:"Data Undangan",registrations:"Data Registrasi",invitation:"Undangan",campaigns:"Kampanye Undangan"}[view];
+  const title = {events:"Data Acara",registrations:"Data Registrasi"}[view] || "Data Acara";
   document.querySelector("#page-title").textContent = title;
   const target = document.querySelector("#view");
   target.innerHTML = '<div class="loading">Memuat data...</div>';
   try {
     await loadRegistrations();
-    target.innerHTML = view === "dashboard" ? dashboardView() : view === "registrations" ? registrationsView() : view === "invitation" ? await invitationView() : campaignsView();
-    if (view === "invitation") document.querySelector("#invitation-form").addEventListener("submit", saveInvitation);
-    if (view === "dashboard") document.querySelector("#all-reg").onclick = () => showView("registrations");
-    if (view === "registrations") {
-      document.querySelector("#search").oninput = e => {
-        const q = e.target.value.toLowerCase();
-        const filtered = registrations.filter(r => [r.registration_no,r.name,r.whatsapp,r.address,r.inviter].some(v => String(v || "").toLowerCase().includes(q)));
-        document.querySelector("#registration-table").innerHTML = table(filtered);
+    const events = await loadEvents();
+    target.innerHTML = view === "registrations" ? registrationsView(events) : eventsView(events);
+    if (view === "events") {
+      document.querySelector("#add-event").onclick = () => {
+        document.querySelector("#event-form-wrap").innerHTML = eventForm();
+        document.querySelector("#event-form").addEventListener("submit", saveEvent);
+        document.querySelector("#cancel-event").onclick = () => document.querySelector("#event-form-wrap").innerHTML = "";
       };
-      document.querySelector("#export").onclick = exportCsv;
+    }
+    if (view === "registrations") {
+      const filter = document.querySelector("#event-filter");
+      filter.onchange = () => {
+        document.querySelector("#registration-table").innerHTML = table(filterRegistrations(filter.value, document.querySelector("#search").value.toLowerCase()));
+      };
+      document.querySelector("#search").oninput = e => {
+        document.querySelector("#registration-table").innerHTML = table(filterRegistrations(filter.value, e.target.value.toLowerCase()));
+      };
+      document.querySelector("#export").onclick = () => exportCsv(filterRegistrations(filter.value, document.querySelector("#search").value.toLowerCase()));
     }
   } catch (e) {
-    target.innerHTML = `<div class="notice error">Gagal memuat data. Pastikan akun sudah terdaftar pada tabel admin_users dan kebijakan database sudah diterapkan.</div>`;
+    console.error(e);
+    target.innerHTML = '<div class="notice error">Gagal memuat data acara atau registrasi. Pastikan kebijakan akses database mengizinkan admin membaca data.</div>';
   }
 }
 
-function exportCsv() {
+function exportCsv(rows = registrations) {
   const cols = ["registration_no","name","whatsapp","address","inviter","guest_count","attendance_count","status","created_at"];
-  const csv = [cols.join(","), ...registrations.map(r => cols.map(k => '"' + String(r[k] ?? "").replace(/"/g,'""') + '"').join(","))].join("\r\n");
+  const csv = [cols.join(","), ...rows.map(r => cols.map(k => '"' + String(r[k] ?? "").replace(/"/g,'""') + '"').join(","))].join("\r\n");
   const url = URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}));
   const a = document.createElement("a"); a.href = url; a.download = "data-registrasi-undangan.csv"; a.click(); URL.revokeObjectURL(url);
 }
