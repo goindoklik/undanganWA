@@ -1,5 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
 import { render } from "jsr:@nick/resvg";
+import { PNG } from "npm:pngjs@7.0.0";
+import jpeg from "npm:jpeg-js@0.4.4";
+import { Buffer } from "node:buffer";
 
 type WablasPayload = {
   id?: string;
@@ -86,7 +89,9 @@ function createTicketPng(name: string, phone: string, address: string, registrat
     <rect x="100" y="545" width="1000" height="58" rx="12" fill="#c9a75e"/>
     <text x="600" y="583" fill="#101d38" font-family="Inter" font-size="27" font-weight="700" text-anchor="middle">BERLAKU UNTUK 2 ORANG</text>
   </svg>`;
-  return render(svg);
+  const pngBytes = render(svg);
+  const bitmap = PNG.sync.read(Buffer.from(pngBytes));
+  return jpeg.encode({ data: bitmap.data, width: bitmap.width, height: bitmap.height }, 88).data;
 }
 
 async function sendImage(phone: string, imageUrl: string, caption: string, refId: string) {
@@ -199,9 +204,9 @@ Deno.serve(async (req) => {
 
       const ticketBytes = createTicketPng(name, whatsapp, address, registrationNo);
       if (ticketBytes.byteLength > 2 * 1024 * 1024) throw new Error("Ukuran tiket melebihi batas Wablas 2 MB");
-      const ticketPath = `tickets/${registrationNo}.png`;
+      const ticketPath = `tickets/${registrationNo}.jpg`;
       const { error: uploadError } = await db.storage.from("undangan-assets").upload(ticketPath, ticketBytes, {
-        contentType: "image/png",
+        contentType: "image/jpeg",
         upsert: false,
       });
       if (uploadError) throw new Error("Gagal menyimpan file tiket");
