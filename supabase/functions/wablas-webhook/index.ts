@@ -296,7 +296,7 @@ Deno.serve(async(req)=>{
       }
       const {data:previous,error:prevError}=await db.from("invite_campaigns").select("id,invitation_image_url").eq("is_active",true).order("event_date",{ascending:true}).limit(1).maybeSingle();
       if(prevError) throw prevError;
-      const imageUrl=previous?.invitation_image_url||"https://rexjmedyqrdlyeepuiax.supabase.co/storage/v1/object/public/undangan-assets/Undangan.png";
+      const imageUrl="https://raw.githubusercontent.com/goindoklik/undanganWA/main/Gambar/Undangan.png";
       const {error:offError}=await db.from("invite_campaigns").update({is_active:false}).eq("is_active",true);
       if(offError) throw offError;
       const {data:created,error:createError}=await db.from("invite_campaigns").insert({name:parsed.title,event_title:parsed.title,event_date:parsed.eventDate,venue:parsed.venue,invitation_image_url:imageUrl,is_active:true}).select("id,event_title,event_date,venue,invitation_image_url").single();
