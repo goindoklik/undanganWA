@@ -8,6 +8,7 @@ const supabase = env.VITE_SUPABASE_URL && env.VITE_SUPABASE_ANON_KEY
 const app = document.querySelector("#app");
 let registrations = [];
 let eventRecords = [];
+let authorizedSenders = [];
 let currentUser = null;
 
 const esc = (s = "") => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
@@ -40,6 +41,7 @@ function renderShell() {
       <div class="side-label">MENU UTAMA</div>
       <button class="nav active" data-view="events">▦ <span>Data Acara</span></button>
       <button class="nav" data-view="registrations">▤ <span>Data Registrasi</span></button>
+      <button class="nav" data-view="authorized">♙ <span>Nomor WhatsApp Diizinkan</span></button>
       <div class="side-bottom"><div class="muted tiny">${esc(currentUser?.email)}</div><button id="logout" class="nav">↪ <span>Keluar</span></button></div>
     </aside>
     <main class="content"><header class="topbar"><div><p class="eyebrow">PANEL ADMINISTRATOR</p><h1 id="page-title">Data Acara</h1></div><div class="avatar">A</div></header><section id="view"></section></main>
@@ -172,16 +174,95 @@ function filterRegistrations(eventId, query = "") {
 }
 
 
+
+async function loadAuthorizedSenders() {
+  const { data, error } = await supabase.from("authorized_senders")
+    .select("id,phone,display_name,is_active,created_at")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  authorizedSenders = data || [];
+  return authorizedSenders;
+}
+
+function authorizedView(rows) {
+  return `<section class="panel">
+    <div class="panel-head"><div><h2>Nomor WhatsApp Diizinkan</h2><p class="muted">Hanya nomor aktif yang dapat menggunakan perintah Undang.</p></div></div>
+    <form id="authorized-form" class="panel" style="padding:16px;margin-bottom:18px">
+      <div class="stats" style="grid-template-columns:repeat(2,minmax(0,1fr));margin:0">
+        <label>Nama Pengguna<input class="search" name="display_name" placeholder="Nama pengundang" required></label>
+        <label>Nomor WhatsApp<input class="search" name="phone" placeholder="08xxxxxxxxxx" inputmode="numeric" required></label>
+      </div>
+      <button class="primary compact" type="submit">+ Tambah Nomor</button><div id="authorized-feedback"></div>
+    </form>
+    ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Nama</th><th>Nomor WhatsApp</th><th>Status</th><th>Tanggal Ditambahkan</th><th>Aksi</th></tr></thead><tbody>
+      ${rows.map(row => `<tr><td><b>${esc(row.display_name)}</b></td><td class="mono">${esc(row.phone)}</td><td><span class="status ${row.is_active ? "" : "cancelled"}">${row.is_active ? "Aktif" : "Nonaktif"}</span></td><td>${date(row.created_at)}</td><td><button class="outline compact edit-sender" data-id="${row.id}">Edit</button> <button class="outline compact toggle-sender" data-id="${row.id}">${row.is_active ? "Nonaktifkan" : "Aktifkan"}</button> <button class="outline compact delete-sender" data-id="${row.id}">Hapus</button></td></tr>`).join("")}
+    </tbody></table></div>` : '<div class="empty">Belum ada nomor WhatsApp yang diizinkan.</div>'}
+  </section>`;
+}
+
+async function saveAuthorizedSender(e, id = null) {
+  e.preventDefault();
+  const fd = new FormData(e.currentTarget);
+  let phone = String(fd.get("phone") || "").replace(/\\D/g, "");
+  if (phone.startsWith("0")) phone = "62" + phone.slice(1);
+  if (phone.startsWith("8")) phone = "62" + phone;
+  const display_name = String(fd.get("display_name") || "").trim();
+  const feedback = document.querySelector("#authorized-feedback");
+  if (!/^62[0-9]{8,13}$/.test(phone) || !display_name) {
+    feedback.innerHTML = '<div class="notice error">Masukkan nama dan nomor WhatsApp Indonesia yang valid.</div>';
+    return;
+  }
+  const query = id
+    ? supabase.from("authorized_senders").update({ phone, display_name, updated_at: new Date().toISOString() }).eq("id", id)
+    : supabase.from("authorized_senders").insert({ phone, display_name, created_by: currentUser.id });
+  const { error } = await query;
+  if (error) {
+    feedback.innerHTML = '<div class="notice error">Gagal menyimpan. Pastikan nomor belum terdaftar.</div>';
+    return;
+  }
+  await showView("authorized");
+}
+
+async function wireAuthorizedView() {
+  document.querySelector("#authorized-form").onsubmit = e => saveAuthorizedSender(e);
+  document.querySelectorAll(".edit-sender").forEach(button => button.onclick = async () => {
+    const row = authorizedSenders.find(item => item.id === button.dataset.id);
+    const name = prompt("Nama pengundang:", row.display_name);
+    if (name === null) return;
+    const number = prompt("Nomor WhatsApp:", row.phone);
+    if (number === null) return;
+    const form = document.createElement("form");
+    form.innerHTML = '<input name="display_name"><input name="phone">';
+    form.elements.display_name.value = name;
+    form.elements.phone.value = number;
+    await saveAuthorizedSender({ preventDefault(){}, currentTarget: form }, row.id);
+  });
+  document.querySelectorAll(".toggle-sender").forEach(button => button.onclick = async () => {
+    const row = authorizedSenders.find(item => item.id === button.dataset.id);
+    const { error } = await supabase.from("authorized_senders").update({ is_active: !row.is_active, updated_at: new Date().toISOString() }).eq("id", row.id);
+    if (error) alert("Status nomor gagal diubah.");
+    else await showView("authorized");
+  });
+  document.querySelectorAll(".delete-sender").forEach(button => button.onclick = async () => {
+    if (!confirm("Hapus nomor WhatsApp ini dari daftar izin?")) return;
+    const { error } = await supabase.from("authorized_senders").delete().eq("id", button.dataset.id);
+    if (error) alert("Nomor gagal dihapus.");
+    else await showView("authorized");
+  });
+}
+
 async function showView(view) {
   document.querySelectorAll(".nav[data-view]").forEach(b => b.classList.toggle("active", b.dataset.view === view));
-  const title = {events:"Data Acara",registrations:"Data Registrasi"}[view] || "Data Acara";
+  const title = {events:"Data Acara",registrations:"Data Registrasi",authorized:"Nomor WhatsApp Diizinkan"}[view] || "Data Acara";
   document.querySelector("#page-title").textContent = title;
   const target = document.querySelector("#view");
   target.innerHTML = '<div class="loading">Memuat data...</div>';
   try {
     await loadRegistrations();
     const events = await loadEvents();
-    target.innerHTML = view === "registrations" ? registrationsView(events) : eventsView(events);
+    if (view === "authorized") await loadAuthorizedSenders();
+    target.innerHTML = view === "authorized" ? authorizedView(authorizedSenders) : (view === "registrations" ? registrationsView(events) : eventsView(events));
+    if (view === "authorized") wireAuthorizedView();
     if (view === "events") {
       document.querySelector("#add-event").onclick = () => {
         document.querySelector("#event-form-wrap").innerHTML = eventForm();
