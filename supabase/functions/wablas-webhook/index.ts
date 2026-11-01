@@ -459,7 +459,10 @@ Deno.serve(async (req) => {
           .eq("whatsapp", registrantPhone)
           .eq("status", "registered")
           .maybeSingle();
-        if (existing) {
+        // Nomor khusus pengujian boleh mengulang DAFTAR berkali-kali.
+        // Pengecualian hanya berlaku bila nomor pengirim dan nomor peserta sama.
+        const isRepeatTestNumber = phone === "6289653639580" && registrantPhone === "6289653639580";
+        if (existing && !isRepeatTestNumber) {
           await db.from("bot_registration_sessions").delete().eq("phone", phone);
           await sendText(phone, `Nomor WhatsApp ini sudah terdaftar dengan No Register ${existing.registration_no}.`);
           return json({ accepted: true, duplicate_registration: true });
