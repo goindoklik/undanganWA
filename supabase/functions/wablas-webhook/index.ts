@@ -78,8 +78,8 @@ function xml(value: string) {
   return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]!));
 }
 
-function createTicketPng(name: string, phone: string, address: string, registrationNo: string, inviter: string) {
-  const short = (value: string, max: number) => xml(value.length > max ? value.slice(0, max - 1) + "…" : value);
+function createTicketPng(name: string, phone: string, address: string, registrationNo: string, inviter: string, eventTitle: string, eventDate: string, venue: string) {
+  const short = (value: string, max: number) => xml(value.length > max ? value.slice(0, max - 1) + "…" : value);\n  const date = new Date(eventDate);\n  const dateLabel = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "2-digit", month: "long", year: "numeric", timeZone: "Asia/Jakarta" }).format(date);\n  const timeLabel = new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jakarta" }).format(date) + " WIB";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
     <defs>
       <linearGradient id="navy" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#061329"/><stop offset=".55" stop-color="#102b55"/><stop offset="1" stop-color="#061329"/></linearGradient>
@@ -107,11 +107,11 @@ function createTicketPng(name: string, phone: string, address: string, registrat
     <rect x="55" y="460" width="710" height="132" rx="24" fill="#07162d" stroke="url(#gold)" stroke-width="6"/>
     <path d="M290 478V574M520 478V574" stroke="#e7c65d" stroke-width="3"/>
     <text x="85" y="510" fill="#ffe27b" font-family="Arial,sans-serif" font-size="18" font-weight="700">TANGGAL</text>
-    <text x="85" y="550" fill="#fff" font-family="Arial,sans-serif" font-size="27" font-weight="900">31 OKTOBER 2026</text>
+    <text x="85" y="550" fill="#fff" font-family="Arial,sans-serif" font-size="27" font-weight="900">${short(dateLabel.toLocaleUpperCase("id-ID"), 24)}</text>
     <text x="320" y="510" fill="#ffe27b" font-family="Arial,sans-serif" font-size="18" font-weight="700">PUKUL</text>
-    <text x="320" y="550" fill="#fff" font-family="Arial,sans-serif" font-size="30" font-weight="900">13.00 WIB</text>
+    <text x="320" y="550" fill="#fff" font-family="Arial,sans-serif" font-size="30" font-weight="900">${short(timeLabel, 14)}</text>
     <text x="550" y="510" fill="#ffe27b" font-family="Arial,sans-serif" font-size="18" font-weight="700">TEMPAT</text>
-    <text x="550" y="550" fill="#fff" font-family="Arial,sans-serif" font-size="24" font-weight="900">AULA LEUWIMUNDING</text>
+    <text x="550" y="550" fill="#fff" font-family="Arial,sans-serif" font-size="24" font-weight="900">${short(venue.toLocaleUpperCase("id-ID"), 22)}</text>
     <text x="78" y="640" fill="#fff" font-family="Arial,sans-serif" font-size="21">Kami mengundang Anda untuk hadir dalam acara besar</text>
     <text x="78" y="672" fill="#fff" font-family="Arial,sans-serif" font-size="21">offline PilotX. Perluas jaringan, tambah wawasan,</text>
     <text x="78" y="704" fill="#fff" font-family="Arial,sans-serif" font-size="21">dan raih peluang bisnis yang lebih besar.</text>
@@ -120,7 +120,7 @@ function createTicketPng(name: string, phone: string, address: string, registrat
     <rect x="825" y="35" width="335" height="730" rx="22" fill="url(#cream)" stroke="url(#gold)" stroke-width="5"/>
     <rect x="842" y="52" width="301" height="78" rx="14" fill="url(#gold)"/>
     <text x="992" y="85" fill="#09152b" font-family="Arial,sans-serif" font-size="26" font-weight="900" text-anchor="middle">TIKET UNDANGAN</text>
-    <text x="992" y="112" fill="#09152b" font-family="Arial,sans-serif" font-size="15" font-weight="700" text-anchor="middle">PILOTX BUSINESS EVENT</text>
+    <text x="992" y="112" fill="#09152b" font-family="Arial,sans-serif" font-size="15" font-weight="700" text-anchor="middle">${short(eventTitle, 30)}</text>
     <text x="992" y="166" fill="#07152d" font-family="Arial,sans-serif" font-size="19" font-weight="700" text-anchor="middle">NO. REGISTER</text>
     <rect x="850" y="178" width="285" height="52" rx="10" fill="#071a39"/>
     <text x="992" y="214" fill="#fff" font-family="Arial,sans-serif" font-size="27" font-weight="900" text-anchor="middle">${short(registrationNo, 18)}</text>
@@ -273,7 +273,7 @@ Deno.serve(async (req) => {
       }).select("id").single();
       if (insertError || !saved) throw new Error("Gagal menyimpan registrasi");
 
-      const ticketBytes = createTicketPng(name, whatsapp, address, registrationNo, inviter);
+      const { data: event, error: eventError } = await db.from("invite_campaigns").select("event_title,name,event_date,venue").eq("id", conversation.campaign_id).maybeSingle();\n      if (eventError || !event?.event_date || !event?.venue) throw new Error("Data acara untuk tiket tidak ditemukan atau belum lengkap");\n      const ticketBytes = createTicketPng(name, whatsapp, address, registrationNo, inviter, event.event_title || event.name || "Undangan Acara", event.event_date, event.venue);
       if (ticketBytes.byteLength > 2 * 1024 * 1024) throw new Error("Ukuran tiket melebihi batas Wablas 2 MB");
       const ticketPath = `tickets/${registrationNo}.png`;
       const { error: uploadError } = await db.storage.from("undangan-assets").upload(ticketPath, ticketBytes, {
