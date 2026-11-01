@@ -394,7 +394,28 @@ async function showView(view) {
         document.querySelector("#event-form").addEventListener("submit", e => saveEvent(e));
         document.querySelector("#cancel-event").onclick = () => document.querySelector("#event-form-wrap").innerHTML = "";
       };
-      document.querySelectorAll(".invitation-event").forEach(button => button.onclick = () => showEventInvitation(button.dataset.id));
+      document.querySelectorAll(".invitation-event").forEach(button => button.onclick = async () => {
+        const event = eventRecords.find(item => item.id === button.dataset.id);
+        if (!event) return;
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = "Membuat...";
+        try {
+          const dataUrl = await buildInvitationDataUrl(event);
+          const a = document.createElement("a");
+          a.href = dataUrl;
+          a.download = "Undangan-" + String(event.event_title || event.name || "Acara").replace(/[^a-z0-9-_]+/gi, "-") + ".png";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } catch (error) {
+          console.error("Gagal mengunduh undangan:", error);
+          alert(error.message || "Gambar undangan gagal dibuat.");
+        } finally {
+          button.disabled = false;
+          button.textContent = originalText;
+        }
+      });
       document.querySelectorAll(".edit-event").forEach(button => button.onclick = () => {
         const event = events.find(ev => ev.id === button.dataset.id);
         document.querySelector("#event-form-wrap").innerHTML = eventForm(event);
