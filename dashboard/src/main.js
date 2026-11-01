@@ -470,7 +470,53 @@ function exportCsv(rows = registrations) {
   const a = document.createElement("a"); a.href = url; a.download = "data-registrasi-undangan.csv"; a.click(); URL.revokeObjectURL(url);
 }
 
+
+async function renderPublicInvitation() {
+  document.title = "Undangan Acara";
+  if (!supabase) {
+    app.innerHTML = '<main class="login-wrap"><section class="login-card"><h1>Undangan belum dapat dibuka</h1><p>Konfigurasi layanan belum tersedia.</p></section></main>';
+    return;
+  }
+  const id = decodeURIComponent(location.pathname.split("/").filter(Boolean)[1] || "");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+    app.innerHTML = '<main class="login-wrap"><section class="login-card"><h1>Link undangan tidak valid</h1><p>Periksa kembali link yang Anda terima.</p></section></main>';
+    return;
+  }
+  app.innerHTML = '<main class="login-wrap"><section class="login-card"><p class="eyebrow">UNDANGAN ACARA</p><h1>Memuat undangan...</h1></section></main>';
+  const { data: event, error } = await supabase.from("invite_campaigns")
+    .select("event_title,name,event_date,venue,is_active")
+    .eq("id", id).eq("is_active", true).maybeSingle();
+  if (error || !event) {
+    app.innerHTML = '<main class="login-wrap"><section class="login-card"><h1>Undangan tidak ditemukan</h1><p>Link mungkin tidak aktif atau acara sudah tidak tersedia.</p></section></main>';
+    return;
+  }
+  const eventDate = new Date(event.event_date);
+  const dateText = event.event_date ? new Intl.DateTimeFormat("id-ID", {weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"Asia/Jakarta"}).format(eventDate) : "Belum ditentukan";
+  const timeText = event.event_date ? new Intl.DateTimeFormat("id-ID", {hour:"2-digit",minute:"2-digit",hourCycle:"h23",timeZone:"Asia/Jakarta"}).format(eventDate) + " WIB" : "Belum ditentukan";
+  const ended = event.event_date && eventDate.getTime() < Date.now();
+  const safe = value => esc(value || "-");
+  app.innerHTML = `
+    <main class="login-wrap" style="padding:24px 16px;background:linear-gradient(145deg,#101b33,#172b4d)">
+      <article class="login-card" style="width:min(100%,620px);padding:clamp(24px,6vw,48px);border:1px solid #d5b56a">
+        <div style="text-align:center;color:#b18a3b;font-size:12px;letter-spacing:3px;font-weight:800">UNDANGAN</div>
+        <h1 style="text-align:center;font-family:Georgia,serif;font-size:clamp(28px,6vw,42px);margin:18px 0;color:#17233c">${safe(event.event_title || event.name)}</h1>
+        <div style="height:2px;width:72px;background:#c6a45c;margin:22px auto"></div>
+        <p style="text-align:center;color:#526078;line-height:1.8">Dengan hormat, kami mengundang Anda untuk hadir pada acara berikut:</p>
+        <div style="background:#f7f4ed;border-radius:14px;padding:22px;margin:24px 0">
+          <p style="margin:0 0 16px;color:#7b6331;font-size:12px;font-weight:800;letter-spacing:1px">WAKTU ACARA</p>
+          <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#17233c">${safe(dateText)}</p>
+          <p style="margin:0;color:#526078">${safe(timeText)}</p>
+          <p style="margin:22px 0 8px;color:#7b6331;font-size:12px;font-weight:800;letter-spacing:1px">TEMPAT</p>
+          <p style="margin:0;font-size:18px;font-weight:700;color:#17233c;white-space:pre-wrap">${safe(event.venue)}</p>
+        </div>
+        <p style="text-align:center;color:${ended ? "#9a5b28" : "#526078"};font-size:13px">${ended ? "Acara ini telah berlangsung." : "Merupakan suatu kehormatan bagi kami atas kehadiran Anda."}</p>
+        <p style="text-align:center;color:#8790a0;font-size:11px;margin-top:28px">Undangan digital</p>
+      </article>
+    </main>`;
+}
+
 async function boot() {
+  if (location.pathname.startsWith('/undangan/')) { await renderPublicInvitation(); return; }
   if (!supabase) {
     app.innerHTML = '<main class="login-wrap"><section class="login-card"><h1>Konfigurasi belum lengkap</h1><p>Atur VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY pada environment Cloudflare Pages.</p></section></main>';
     return;
