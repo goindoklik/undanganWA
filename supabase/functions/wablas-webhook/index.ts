@@ -351,13 +351,13 @@ Deno.serve(async(req)=>{
         await sendText(phone,"Gambar undangan belum tersedia di penyimpanan. Silakan hubungi admin untuk memperbarui gambar undangan.");
         return json({accepted:true,event_count:events.length,image_found:false});
       }
-      let sent=0;
-      for(const event of eventsWithImage){
-        await sendImage(phone,event.invitation_image_url,"UNDANGAN ACARA\n"+(event.event_title||event.name),"invitation-"+event.id);
-        sent++;
-      }
-      await sendText(phone,"Gambar undangan berhasil dikirim. Silakan buka atau unduh gambar yang terlampir.");
-      return json({accepted:true,event_count:events.length,images_sent:sent});
+      const lines=eventsWithImage.map((event)=>{
+        const downloadUrl=event.invitation_image_url+(event.invitation_image_url.includes("?")?"&":"?")+"download=Undangan.png";
+        return (event.event_title||event.name)+"\n"+downloadUrl;
+      });
+      const message="Silakan unduh gambar undangan melalui tautan berikut:\n\n"+lines.join("\n\n")+"\n\nTautan akan membuka atau mengunduh file gambar dari Supabase Storage.\nTerima kasih.";
+      await sendText(phone,message);
+      return json({accepted:true,event_count:events.length,download_links_sent:eventsWithImage.length});
     }
     if(normalized==="4"){
       const {data:event,error}=await db.from("invite_campaigns").select("id,event_title,name").eq("is_active",true).gte("event_date",now).order("event_date",{ascending:true}).limit(1).maybeSingle();
