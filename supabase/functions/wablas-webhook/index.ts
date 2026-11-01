@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
+import { render } from "jsr:@nick/resvg";
 
 type WablasPayload = {
   id?: string;
@@ -59,6 +60,46 @@ async function sendText(phone: string, message: string) {
   if (!response.ok || result.status !== true) {
     throw new Error("Wablas gagal menerima pesan");
   }
+  return result;
+}
+
+
+function xml(value: string) {
+  return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]!));
+}
+
+function createTicketPng(name: string, phone: string, address: string, registrationNo: string) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+    <rect width="1200" height="675" fill="#101d38"/>
+    <rect x="22" y="22" width="1156" height="631" rx="28" fill="none" stroke="#c9a75e" stroke-width="3"/>
+    <text x="600" y="112" fill="#e8c77a" font-family="Inter" font-size="42" font-weight="700" text-anchor="middle">UNDANGAN KHUSUS</text>
+    <text x="600" y="166" fill="#ffffff" font-family="Inter" font-size="26" text-anchor="middle">TIKET MASUK ACARA</text>
+    <path d="M100 205 H1100" stroke="#9d8550" stroke-width="2"/>
+    <text x="100" y="255" fill="#e8c77a" font-family="Inter" font-size="19">NO REGISTER</text>
+    <text x="100" y="312" fill="#ffffff" font-family="Inter" font-size="43" font-weight="700">${xml(registrationNo)}</text>
+    <text x="100" y="378" fill="#e8c77a" font-family="Inter" font-size="18">NAMA</text>
+    <text x="100" y="416" fill="#ffffff" font-family="Inter" font-size="27" font-weight="700">${xml(name.slice(0,42))}</text>
+    <text x="100" y="468" fill="#e8c77a" font-family="Inter" font-size="18">NO WA</text>
+    <text x="100" y="505" fill="#ffffff" font-family="Inter" font-size="23">${xml(phone)}</text>
+    <text x="650" y="378" fill="#e8c77a" font-family="Inter" font-size="18">ALAMAT</text>
+    <text x="650" y="416" fill="#ffffff" font-family="Inter" font-size="23">${xml(address.slice(0,48))}</text>
+    <rect x="100" y="545" width="1000" height="58" rx="12" fill="#c9a75e"/>
+    <text x="600" y="583" fill="#101d38" font-family="Inter" font-size="27" font-weight="700" text-anchor="middle">BERLAKU UNTUK 2 ORANG</text>
+  </svg>`;
+  return render(svg);
+}
+
+async function sendImage(phone: string, imageUrl: string, caption: string, refId: string) {
+  const token = Deno.env.get("WABLAS_TOKEN");
+  const secret = Deno.env.get("WABLAS_SECRET_KEY");
+  if (!token || !secret) throw new Error("Wablas credentials belum dikonfigurasi");
+  const response = await fetch("https://wablas.com/api/v2/send-image", {
+    method: "POST",
+    headers: { Authorization: `${token}.${secret}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ data: [{ phone, image: imageUrl, caption, ref_id: refId }] }),
+  });
+  const result = await response.json();
+  if (!response.ok || result.status !== true) throw new Error("Wablas gagal menerima tiket gambar");
   return result;
 }
 
@@ -145,7 +186,7 @@ Deno.serve(async (req) => {
       const { data: registrationNo, error: numberError } = await db.rpc("make_registration_no");
       if (numberError || !registrationNo) throw new Error("Gagal membuat nomor registrasi");
 
-      const { error: insertError } = await db.from("registrations").insert({
+      const { data: saved, error: insertError } = await db.from("registrations").insert({
         registration_no: registrationNo,
         name,
         whatsapp,
@@ -153,17 +194,30 @@ Deno.serve(async (req) => {
         inviter,
         inviter_whatsapp: conversation.inviter_whatsapp || null,
         guest_count: 2,
-      });
-      if (insertError) throw new Error("Gagal menyimpan registrasi");
+      }).select("id").single();
+      if (insertError || !saved) throw new Error("Gagal menyimpan registrasi");
 
+      const ticketBytes = createTicketPng(name, whatsapp, address, registrationNo);
+      if (ticketBytes.byteLength > 2 * 1024 * 1024) throw new Error("Ukuran tiket melebihi batas Wablas 2 MB");
+      const ticketPath = `tickets/${registrationNo}.png`;
+      const { error: uploadError } = await db.storage.from("undangan-assets").upload(ticketPath, ticketBytes, {
+        contentType: "image/png",
+        upsert: false,
+      });
+      if (uploadError) throw new Error("Gagal menyimpan file tiket");
+      const { data: publicTicket } = db.storage.from("undangan-assets").getPublicUrl(ticketPath);
+      const ticketUrl = publicTicket.publicUrl;
+
+      await db.from("registrations").update({ ticket_url: ticketUrl }).eq("id", saved.id);
       await db.from("bot_conversations").update({
         state: "idle",
         updated_at: new Date().toISOString(),
         last_message_at: new Date().toISOString(),
       }).eq("phone", phone);
 
-      await sendText(phone, `Terima Kasih, Data Sudah Tersimpan.\n\nNo Register: ${registrationNo}\nNama: ${name}\nNo WA: ${whatsapp}\nAlamat: ${address}\n\nUndangan/tiket Anda berlaku untuk 2 orang. Tiket JPG akan dikirim setelah desain tiket dikonfigurasi oleh admin.`);
-      return json({ accepted: true, registration_no: registrationNo });
+      await sendText(phone, `Terima Kasih, Data Sudah Tersimpan.\\nNo Register: ${registrationNo}\\nTiket undangan Anda berlaku untuk 2 orang. Berikut tiket masuk Anda.`);
+      await sendImage(phone, ticketUrl, `TIKET MASUK - ${registrationNo} (berlaku untuk 2 orang)`, registrationNo);
+      return json({ accepted: true, registration_no: registrationNo, ticket_url: ticketUrl });
     }
 
     return json({ ignored: true, reason: "No active registration flow" });
