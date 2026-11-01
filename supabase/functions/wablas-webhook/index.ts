@@ -96,7 +96,8 @@ async function createTicketPng(name: string, phone: string, address: string, reg
   const date = new Date(eventDate);
   const dateLabel = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "2-digit", month: "long", year: "numeric", timeZone: "Asia/Jakarta" }).format(date);
   // Format tanggal tiket dibuat ringkas agar selalu muat di kolom tanggal.
-  const ticketDateLabel = new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Jakarta" }).format(date).toLocaleUpperCase("id-ID");
+  const ticketWeekdayLabel = new Intl.DateTimeFormat("id-ID", { weekday: "long", timeZone: "Asia/Jakarta" }).format(date);
+  const ticketDateLabel = new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Jakarta" }).format(date).replace(".", "").toLocaleUpperCase("id-ID");
   const timeLabel = new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jakarta" }).format(date) + " WIB";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
     <defs>
@@ -125,11 +126,13 @@ async function createTicketPng(name: string, phone: string, address: string, reg
     <rect x="55" y="460" width="710" height="132" rx="24" fill="#07162d" stroke="url(#gold)" stroke-width="6"/>
     <path d="M290 478V574M520 478V574" stroke="#e7c65d" stroke-width="3"/>
     <text x="85" y="510" fill="#ffe27b" font-family="Poppins" font-size="18" font-weight="700">TANGGAL</text>
-    <text x="85" y="550" fill="#fff" font-family="Poppins" font-size="27" font-weight="900">${short(ticketDateLabel, 14)}</text>
+    <text x="85" y="542" fill="#fff" font-family="Poppins" font-size="19" font-weight="700">${xml(ticketWeekdayLabel)}</text>
+    <text x="85" y="572" fill="#fff" font-family="Poppins" font-size="21" font-weight="900">${short(ticketDateLabel, 14)}</text>
     <text x="320" y="510" fill="#ffe27b" font-family="Poppins" font-size="18" font-weight="700">PUKUL</text>
     <text x="320" y="550" fill="#fff" font-family="Poppins" font-size="30" font-weight="900">${short(timeLabel, 14)}</text>
     <text x="550" y="510" fill="#ffe27b" font-family="Poppins" font-size="18" font-weight="700">TEMPAT</text>
-    <text x="550" y="550" fill="#fff" font-family="Poppins" font-size="24" font-weight="900">${short(venue.toLocaleUpperCase("id-ID"), 22)}</text>
+    <text x="550" y="538" fill="#fff" font-family="Poppins" font-size="21" font-weight="900">${short(/^Basecamp\s+PilotX\s+majalengka$/i.test(venue.trim()) ? "Basecamp" : venue.toLocaleUpperCase("id-ID"), 22)}</text>
+    <text x="550" y="566" fill="#fff" font-family="Poppins" font-size="18" font-weight="900">${/^Basecamp\s+PilotX\s+majalengka$/i.test(venue.trim()) ? "PilotX majalengka" : ""}</text>
     <text x="78" y="640" fill="#fff" font-family="Poppins" font-size="21">Kami mengundang Anda untuk hadir dalam acara besar</text>
     <text x="78" y="672" fill="#fff" font-family="Poppins" font-size="21">offline PilotX. Perluas jaringan, tambah wawasan,</text>
     <text x="78" y="704" fill="#fff" font-family="Poppins" font-size="21">dan raih peluang bisnis yang lebih besar.</text>
