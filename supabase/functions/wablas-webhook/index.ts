@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
-import { render } from "jsr:@nick/resvg";
+import { Resvg } from "npm:@resvg/resvg-js@2.6.2";
 import { PNG } from "npm:pngjs@7.0.0";
 import jpeg from "npm:jpeg-js@0.4.4";
 import { Buffer } from "node:buffer";
@@ -89,7 +89,7 @@ function createTicketPng(name: string, phone: string, address: string, registrat
     <rect x="100" y="545" width="1000" height="58" rx="12" fill="#c9a75e"/>
     <text x="600" y="583" fill="#101d38" font-family="Inter" font-size="27" font-weight="700" text-anchor="middle">BERLAKU UNTUK 2 ORANG</text>
   </svg>`;
-  const pngBytes = render(svg);
+  const pngBytes = new Resvg(svg).render().asPng();
   const bitmap = PNG.sync.read(Buffer.from(pngBytes));
   return jpeg.encode({ data: bitmap.data, width: bitmap.width, height: bitmap.height }, 88).data;
 }
