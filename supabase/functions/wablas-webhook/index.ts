@@ -208,15 +208,31 @@ Deno.serve(async (req) => {
 
   try {
     if (normalized === "daftar") {
+      // Associate this registration flow with the invitation/event sent to this WhatsApp number.
+      const { data: sentInvitation } = await db.from("invitations")
+        .select("id,campaign_id,inviter_name")
+        .eq("phone", phone)
+        .order("sent_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      let campaignId = sentInvitation?.campaign_id || null;
+      if (!campaignId) {
+        const { data: activeCampaign } = await db.from("invite_campaigns")
+          .select("id").eq("is_active", true)
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        campaignId = activeCampaign?.id || null;
+      }
       await db.from("bot_conversations").upsert({
         phone,
         push_name: payload.pushName || null,
+        campaign_id: campaignId,
+        inviter_name: sentInvitation?.inviter_name || null,
         state: "awaiting_registration",
         updated_at: new Date().toISOString(),
         last_message_at: new Date().toISOString(),
       });
-      await sendText(phone, "Silahkan isi\nNama :\nNo WA:\nAlamat :\nPengundang :\n\nBalas pesan ini dengan data lengkap Anda.");
-      return json({ accepted: true, state: "awaiting_registration" });
+      await sendText(phone, "Silahkan isi\\nNama :\\nNo WA:\\nAlamat :\\nPengundang :\\n\\nBalas pesan ini dengan data lengkap Anda.");
+      return json({ accepted: true, state: "awaiting_registration", campaign_id: campaignId });
     }
 
     if (conversation?.state === "awaiting_registration") {
@@ -247,6 +263,7 @@ Deno.serve(async (req) => {
 
       const { data: saved, error: insertError } = await db.from("registrations").insert({
         registration_no: registrationNo,
+        campaign_id: conversation.campaign_id || null,
         name,
         whatsapp,
         address,
