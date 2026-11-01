@@ -1,0 +1,4 @@
+project_id = "rexjmedyqrdlyeepuiax"
+
+[functions.wablas-webhook]
+verify_jwt = false
