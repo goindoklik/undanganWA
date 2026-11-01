@@ -238,283 +238,111 @@ async function sendImage(phone: string, imageUrl: string, caption: string, refId
   return result;
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
-  const webhookSecret = Deno.env.get("WABLAS_WEBHOOK_SECRET");
-  const suppliedSecret = new URL(req.url).searchParams.get("key");
-  if (!webhookSecret || suppliedSecret !== webhookSecret) {
-    return json({ error: "Unauthorized webhook" }, 401);
-  }
+function parseEventInput(input: string) {
+  const parts=input.split("#").map(x=>x.trim());
+  if(parts.length!==4||parts.some(x=>!x)) throw new Error("Format harus terdiri dari 4 bagian yang dipisahkan tanda #.");
+  const [title,dateText,timeText,venue]=parts;
+  const dm=dateText.match(/^(\d{1,2})\s+([A-Za-zÀ-ÿ]+)\s+(\d{4})$/i);
+  if(!dm) throw new Error("Format tanggal tidak valid. Contoh: 3 November 2026.");
+  const months:Record<string,number>={januari:1,january:1,februari:2,february:2,maret:3,march:3,april:4,mei:5,may:5,juni:6,june:6,juli:7,july:7,agustus:8,august:8,september:9,oktober:10,october:11,november:11,desember:12,december:12};
+  const day=Number(dm[1]),month=months[dm[2].toLocaleLowerCase("id-ID")],year=Number(dm[3]);
+  if(!month||day<1||day>31) throw new Error("Tanggal acara tidak valid.");
+  const tm=timeText.match(/^([01]?\d|2[0-3])[.:]([0-5]\d)(?:\s*WIB)?$/i);
+  if(!tm) throw new Error("Format pukul tidak valid. Contoh: 10.00 WIB.");
+  const hour=Number(tm[1]),minute=Number(tm[2]);
+  const iso=String(year)+"-"+String(month).padStart(2,"0")+"-"+String(day).padStart(2,"0")+"T"+String(hour).padStart(2,"0")+":"+String(minute).padStart(2,"0")+":00+07:00";
+  const date=new Date(iso);
+  if(Number.isNaN(date.getTime())||date.getDate()!==day) throw new Error("Tanggal atau waktu acara tidak valid.");
+  return {title,venue,eventDate:date.toISOString()};
+}
+function dateLabel(value:string){return new Intl.DateTimeFormat("id-ID",{day:"numeric",month:"long",year:"numeric",timeZone:"Asia/Jakarta"}).format(new Date(value));}
+function timeLabel(value:string){return new Intl.DateTimeFormat("id-ID",{hour:"2-digit",minute:"2-digit",hourCycle:"h23",timeZone:"Asia/Jakarta"}).format(new Date(value))+" WIB";}
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const db = createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  let payload: WablasPayload;
-  try {
-    payload = await req.json();
-  } catch {
-    return json({ error: "Invalid JSON" }, 400);
-  }
-
-  if (payload.isGroup || payload.isFromMe) return json({ ignored: true });
-  const phone = normalizePhone(payload.phone || "");
-  if (!phone || !payload.id) return json({ error: "Missing sender phone or message id" }, 400);
-
-  const { error: eventError } = await db.from("wablas_inbound_events").insert({
-    wablas_message_id: payload.id,
-    sender_phone: phone,
-    message_type: payload.messageType || "text",
-    message_text: payload.message || "",
-  });
-  if (eventError?.code === "23505") return json({ duplicate: true });
-  if (eventError) return json({ error: "Could not record inbound event" }, 500);
-
-  const text = (payload.message || "").trim();
-  const normalized = text.toLocaleLowerCase("id-ID");
-  const { data: conversation } = await db
-    .from("bot_conversations")
-    .select("*")
-    .eq("phone", phone)
-    .maybeSingle();
-
-  try {
-    const inviteCommand = text.match(/^undang\s+(?:no\s*wa\s*=\s*)?([0-9+().\s-]+?)(?:\s+dari\s+([0-9+().\s-]+))?$/i);
-    if (inviteCommand) {
-      const { data: sender } = await db.from("authorized_senders")
-        .select("id,phone,display_name,is_active")
-        .eq("phone", phone).maybeSingle();
-      if (!sender || !sender.is_active) {
-        await sendText(phone, "Maaf, nomor WhatsApp Anda belum terdaftar atau sedang tidak diizinkan menggunakan perintah undangan. Hubungi admin acara.");
-        return json({ accepted: false, reason: "sender_not_authorized" });
+Deno.serve(async(req)=>{
+  if(req.method==="OPTIONS") return new Response("ok",{headers:corsHeaders});
+  if(req.method!=="POST") return json({error:"Method not allowed"},405);
+  const secret=Deno.env.get("WABLAS_WEBHOOK_SECRET"),supplied=new URL(req.url).searchParams.get("key");
+  if(!secret||supplied!==secret) return json({error:"Unauthorized webhook"},401);
+  const db=createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});
+  let payload:WablasPayload;
+  try{payload=await req.json();}catch{return json({error:"Invalid JSON"},400);}
+  if(payload.isGroup||payload.isFromMe) return json({ignored:true});
+  const phone=normalizePhone(payload.phone||"");
+  if(!phone||!payload.id) return json({error:"Missing sender phone or message id"},400);
+  const {error:inboundError}=await db.from("wablas_inbound_events").insert({wablas_message_id:payload.id,sender_phone:phone,message_type:payload.messageType||"text",message_text:payload.message||""});
+  if(inboundError?.code==="23505") return json({duplicate:true});
+  if(inboundError) return json({error:"Could not record inbound event"},500);
+  try{
+    const {data:sender,error:senderError}=await db.from("authorized_senders").select("id,phone,display_name,is_active").eq("phone",phone).eq("is_active",true).maybeSingle();
+    if(senderError) throw senderError;
+    if(!sender) return json({ignored:true,reason:"sender_not_registered"});
+    const message=(payload.message||"").trim(),normalized=message.toLocaleLowerCase("id-ID"),now=new Date().toISOString();
+    const {data:conv,error:convError}=await db.from("bot_conversations").select("state,campaign_id").eq("phone",phone).maybeSingle();
+    if(convError) throw convError;
+    const state=conv?.state||"idle";
+    const saveState=async(next:string,campaignId:string|null=null)=>{
+      const {error}=await db.from("bot_conversations").upsert({phone,push_name:payload.pushName||sender.display_name||null,state:next,campaign_id:campaignId,last_message_at:now,updated_at:now},{onConflict:"phone"});
+      if(error) throw error;
+    };
+    const menu="MENU BOT UNDANGAN\n\n1. Data Acara\n2. Buat Acara\n3. Daftar Hadir\n\nSilakan balas dengan angka 1, 2, atau 3.";
+    if(normalized==="menu"){await saveState("idle");await sendText(phone,menu);return json({accepted:true,menu:true});}
+    if(state==="await_event_format"){
+      let parsed;
+      try{parsed=parseEventInput(message);}catch(e){
+        await sendText(phone,"Format belum sesuai.\n\nSilakan balas dengan format:\nNama Acara#Waktu Acara#Pukul#Tempat\n\nContoh:\nGathering 03 November 2026#3 November 2026#10.00 WIB#Basecamp Pilotx Majalengka\n\n"+(e instanceof Error?e.message:""));
+        return json({accepted:false,reason:"invalid_event_format"});
       }
-
-      const targetPhone = normalizePhone(inviteCommand[1]);
-      if (!/^62[0-9]{8,13}$/.test(targetPhone)) {
-        await sendText(phone, "Format nomor tujuan tidak valid. Gunakan: Undang no WA = 08xxxxxxxxxx");
-        return json({ accepted: true, invalid: "target_phone" });
-      }
-      if (targetPhone === phone) {
-        await sendText(phone, "Nomor tujuan tidak boleh sama dengan nomor pengundang.");
-        return json({ accepted: true, invalid: "same_phone" });
-      }
-
-      const now = new Date();
-
-      const { data: campaign } = await db.from("invite_campaigns")
-        .select("id,event_title,name,event_date,venue,invitation_image_url")
-        .eq("is_active", true).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (!campaign || !campaign.invitation_image_url) {
-        await sendText(phone, "Undangan belum dapat dikirim karena data acara aktif atau gambar undangan belum tersedia. Hubungi admin.");
-        return json({ accepted: false, reason: "campaign_unavailable" });
-      }
-
-      const { data: duplicate } = await db.from("invitations").select("id")
-        .eq("campaign_id", campaign.id).eq("phone", targetPhone).maybeSingle();
-      if (duplicate) {
-        await sendText(phone, "Nomor tersebut sudah pernah menerima undangan untuk acara aktif ini.");
-        return json({ accepted: false, reason: "duplicate_target" });
-      }
-
-      const { error: insertInviteError } = await db.from("invitations").insert({
-        campaign_id: campaign.id,
-        phone: targetPhone,
-        contact_name: "",
-        inviter_name: sender.display_name,
-        status: "sending"
-      });
-      if (insertInviteError) throw new Error("Gagal mencatat undangan");
-
-      const eventDate = new Date(campaign.event_date);
-      const dateLabel = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "2-digit", month: "long", year: "numeric", timeZone: "Asia/Jakarta" }).format(eventDate);
-      const timeLabel = new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jakarta" }).format(eventDate) + " WIB";
-      const caption = "HADIR\nTIDAK HADIR";
-      try {
-        const invitationPng = await createInvitationImage(campaign.invitation_image_url, campaign.event_title || campaign.name || "UNDANGAN ACARA", dateLabel, timeLabel, campaign.venue || "-");
-        const invitationPath = "invitations/" + campaign.id + "/" + targetPhone + "-" + Date.now() + ".png";
-        const { error: invitationUploadError } = await db.storage.from("undangan-assets").upload(invitationPath, invitationPng, { contentType: "image/png", upsert: false });
-        if (invitationUploadError) throw new Error("Gagal menyimpan gambar undangan dengan detail acara");
-        const { data: invitationPublic } = db.storage.from("undangan-assets").getPublicUrl(invitationPath);
-        const sent = await sendImage(targetPhone, invitationPublic.publicUrl, caption, crypto.randomUUID());
-        const messageId = Array.isArray((sent as any).data) ? (sent as any).data[0]?.id || null : null;
-        await db.from("invitations").update({ status: "sent", sent_at: now.toISOString(), wablas_message_id: messageId })
-          .eq("campaign_id", campaign.id).eq("phone", targetPhone);
-        await sendText(phone, `Undangan berhasil dikirim ke ${targetPhone}.`);
-        return json({ accepted: true, invited: targetPhone, campaign_id: campaign.id });
-      } catch (sendError) {
-        await db.from("invitations").update({ status: "failed" }).eq("campaign_id", campaign.id).eq("phone", targetPhone);
-        throw sendError;
+      const {data:previous,error:prevError}=await db.from("invite_campaigns").select("id,invitation_image_url").eq("is_active",true).order("event_date",{ascending:true}).limit(1).maybeSingle();
+      if(prevError) throw prevError;
+      const imageUrl=previous?.invitation_image_url||"https://rexjmedyqrdlyeepuiax.supabase.co/storage/v1/object/public/undangan-assets/Undangan.png";
+      const {error:offError}=await db.from("invite_campaigns").update({is_active:false}).eq("is_active",true);
+      if(offError) throw offError;
+      const {data:created,error:createError}=await db.from("invite_campaigns").insert({name:parsed.title,event_title:parsed.title,event_date:parsed.eventDate,venue:parsed.venue,invitation_image_url:imageUrl,is_active:true}).select("id,event_title,event_date,venue,invitation_image_url").single();
+      if(createError||!created){if(previous?.id) await db.from("invite_campaigns").update({is_active:true}).eq("id",previous.id);throw createError||new Error("Gagal menyimpan acara.");}
+      await saveState("idle",created.id);
+      await sendText(phone,"Data sudah di buat");
+      try{
+        const png=await createInvitationImage(created.invitation_image_url,created.event_title,dateLabel(created.event_date),timeLabel(created.event_date),created.venue);
+        const path="event-invitations/"+created.id+"/"+Date.now()+".png";
+        const {error:uploadError}=await db.storage.from("undangan-assets").upload(path,png,{contentType:"image/png",upsert:false});
+        if(uploadError) throw uploadError;
+        const {data:publicImage}=db.storage.from("undangan-assets").getPublicUrl(path);
+        await sendImage(phone,publicImage.publicUrl,"UNDANGAN ACARA\n"+created.event_title,"event-"+created.id);
+        return json({accepted:true,event_id:created.id,image_sent:true});
+      }catch(e){
+        console.error("EVENT_INVITATION_IMAGE_FAILED",e instanceof Error?e.message:"unknown");
+        await sendText(phone,"Data acara sudah tersimpan, tetapi gambar undangan belum berhasil dikirim.");
+        return json({accepted:true,event_id:created.id,image_sent:false});
       }
     }
-
-    if (normalized === "hadir" || normalized === "tidak hadir") {
-      const { data: latestInvitation } = await db.from("invitations")
-        .select("id,campaign_id,status,contact_name,inviter_name")
-        .eq("phone", phone)
-        .order("sent_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (!latestInvitation) {
-        await sendText(phone, "Kami belum menemukan undangan yang terkait dengan nomor ini.");
-        return json({ accepted: false, reason: "invitation_not_found" });
-      }
-
-      if (normalized === "tidak hadir") {
-        const { error: rsvpError } = await db.from("invitations")
-          .update({ status: "not_attending" }).eq("id", latestInvitation.id);
-        if (rsvpError) throw new Error("Gagal menyimpan konfirmasi ketidakhadiran");
-        await sendText(phone, "Terima kasih. Konfirmasi Anda telah kami catat: TIDAK HADIR.");
-        return json({ accepted: true, rsvp: "not_attending" });
-      }
-
-      // HADIR langsung mendaftarkan penerima undangan dan mengirim tiket gambar statis.
-      const { error: registerError } = await db.from("invitations")
-        .update({ status: "registered" }).eq("id", latestInvitation.id);
-      if (registerError) throw new Error("Gagal menyimpan status registrasi undangan");
-
-      const ticketUrl = "https://rexjmedyqrdlyeepuiax.supabase.co/storage/v1/object/public/undangan-assets/Tiket.png";
-      await sendText(phone, "Terima kasih! Konfirmasi HADIR Anda sudah tercatat dan Anda resmi terdaftar. Berikut tiket undangan Anda. Tiket berlaku untuk 2 orang.");
-      await sendImage(phone, ticketUrl, "TIKET UNDANGAN - HADIR (berlaku untuk 2 orang)", "ticket-hadir-" + latestInvitation.id);
-      return json({ accepted: true, rsvp: "registered", ticket_url: ticketUrl });
+    if(normalized==="1"){
+      const {data:event,error}=await db.from("invite_campaigns").select("id,event_title,name,event_date,venue").eq("is_active",true).gte("event_date",now).order("event_date",{ascending:true}).limit(1).maybeSingle();
+      if(error) throw error;
+      if(!event){await saveState("idle");await sendText(phone,"Belum ada data acara yang akan berlangsung.");return json({accepted:true,event_found:false});}
+      const {count,error:countError}=await db.from("registrations").select("id",{count:"exact",head:true}).eq("campaign_id",event.id).eq("status","registered");
+      if(countError) throw countError;
+      await saveState("idle",event.id);
+      await sendText(phone,"DATA ACARA\n\nNama Acara : "+(event.event_title||event.name)+"\n\nWaktu : "+dateLabel(event.event_date)+"\n\nPukul : "+timeLabel(event.event_date)+"\n\nTempat : "+event.venue+"\n\nYang sudah daftar : "+(count||0)+" orang");
+      return json({accepted:true,event_id:event.id,registered_count:count||0});
     }
-
-    // Alur pendaftaran bertahap baru untuk kata kunci DAFTAR.
-    if (normalized === "daftar") {
-      const { data: campaign } = await db.from("invite_campaigns")
-        .select("id,event_title,name,event_date,venue")
-        .eq("is_active", true)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (!campaign) {
-        await sendText(phone, "Pendaftaran belum tersedia karena belum ada acara aktif. Silakan hubungi admin acara.");
-        return json({ accepted: false, reason: "campaign_unavailable" });
-      }
-      const { data: sentInvitation } = await db.from("invitations")
-        .select("id,inviter_name")
-        .eq("phone", phone)
-        .eq("campaign_id", campaign.id)
-        .order("sent_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const { error: sessionError } = await db.from("bot_registration_sessions").upsert({
-        phone,
-        campaign_id: campaign.id,
-        invitation_id: sentInvitation?.id || null,
-        inviter: sentInvitation?.inviter_name || "Pendaftaran Mandiri",
-        step: "confirm",
-        name: null,
-        whatsapp: null,
-        updated_at: new Date().toISOString(),
-      });
-      if (sessionError) throw new Error("Gagal memulai sesi pendaftaran");
-      const eventName = campaign.event_title || campaign.name || "Acara";
-      await sendText(phone, `Pendaftaran untuk ${eventName}\n\nBalas Y : Untuk Melanjutkan\nBalas N : Untuk stop`);
-      return json({ accepted: true, state: "confirm", campaign_id: campaign.id });
+    if(normalized==="2"){
+      await saveState("await_event_format");
+      await sendText(phone,"Silahkan Balas dengan Format :\n\nNama Acara#Waktu Acara#Pukul#Tempat\n\nContoh :\nGathering 03 November 2026#3 November 2026#10.00 WIB#Basecamp Pilotx Majalengka");
+      return json({accepted:true,state:"await_event_format"});
     }
-
-    // Sesi pendaftaran baru disimpan terpisah agar menu DAFTAR LAMA tetap tersedia.
-    const { data: registrationSession } = await db.from("bot_registration_sessions")
-      .select("*")
-      .eq("phone", phone)
-      .maybeSingle();
-
-    if (registrationSession) {
-      const answer = text.trim();
-      const step = registrationSession.step;
-      if (step === "confirm") {
-        if (/^y$/i.test(answer)) {
-          await db.from("bot_registration_sessions").update({ step: "name", updated_at: new Date().toISOString() }).eq("phone", phone);
-          await sendText(phone, "Masukan Nama Lengkap Anda");
-          return json({ accepted: true, state: "name" });
-        }
-        if (/^n$/i.test(answer)) {
-          await db.from("bot_registration_sessions").delete().eq("phone", phone);
-          await sendText(phone, "Terima Kasih atas Partipasi anda");
-          return json({ accepted: true, cancelled: true });
-        }
-        return json({ ignored: true, reason: "expected_y_or_n" });
-      }
-
-      if (step === "name") {
-        if (!answer) return json({ ignored: true, reason: "empty_name" });
-        await db.from("bot_registration_sessions").update({ name: answer, step: "whatsapp", updated_at: new Date().toISOString() }).eq("phone", phone);
-        await sendText(phone, "Masukan No WhatsApp Anda");
-        return json({ accepted: true, state: "whatsapp" });
-      }
-
-      if (step === "whatsapp") {
-        const registrantPhone = normalizePhone(answer);
-        if (!/^62[0-9]{8,13}$/.test(registrantPhone)) return json({ ignored: true, reason: "invalid_whatsapp" });
-        await db.from("bot_registration_sessions").update({ whatsapp: registrantPhone, step: "address", updated_at: new Date().toISOString() }).eq("phone", phone);
-        await sendText(phone, "Alamat Anda: Silakan isi nama kabupaten.");
-        return json({ accepted: true, state: "address" });
-      }
-
-      if (step === "address") {
-        const address = answer;
-        if (!address) return json({ ignored: true, reason: "empty_address" });
-        const registrantPhone = registrationSession.whatsapp;
-        const { data: existing } = await db.from("registrations")
-          .select("registration_no")
-          .eq("whatsapp", registrantPhone)
-          .eq("status", "registered")
-          .maybeSingle();
-        // Nomor khusus pengujian boleh mengulang DAFTAR berkali-kali.
-        // Pengecualian hanya berlaku bila nomor pengirim dan nomor peserta sama.
-        const isRepeatTestNumber = phone === "6289653639580" && registrantPhone === "6289653639580";
-        if (existing && !isRepeatTestNumber) {
-          await db.from("bot_registration_sessions").delete().eq("phone", phone);
-          await sendText(phone, `Nomor WhatsApp ini sudah terdaftar dengan No Register ${existing.registration_no}.`);
-          return json({ accepted: true, duplicate_registration: true });
-        }
-
-        const { data: event, error: eventError } = await db.from("invite_campaigns")
-          .select("event_title,name,event_date,venue")
-          .eq("id", registrationSession.campaign_id)
-          .maybeSingle();
-        if (eventError || !event?.event_date || !event?.venue) throw new Error("Data acara untuk tiket tidak ditemukan atau belum lengkap");
-        const { data: registrationNo, error: numberError } = await db.rpc("make_registration_no");
-        if (numberError || !registrationNo) throw new Error("Gagal membuat nomor registrasi");
-        const name = registrationSession.name || "";
-        const inviter = registrationSession.inviter || "Pendaftaran Mandiri";
-        const { data: saved, error: insertError } = await db.from("registrations").insert({
-          registration_no: registrationNo,
-          campaign_id: registrationSession.campaign_id,
-          invitation_id: registrationSession.invitation_id,
-          name,
-          whatsapp: registrantPhone,
-          address,
-          inviter,
-          inviter_whatsapp: registrationSession.inviter_whatsapp || null,
-          guest_count: 2,
-        }).select("id").single();
-        if (insertError || !saved) throw new Error("Gagal menyimpan registrasi");
-
-        const ticketBytes = await createTicketPng(name, registrantPhone, address, registrationNo, inviter, event.event_title || event.name || "Undangan Acara", event.event_date, event.venue);
-        if (ticketBytes.byteLength > 2 * 1024 * 1024) throw new Error("Ukuran tiket melebihi batas Wablas 2 MB");
-        const ticketPath = `tickets/${registrationNo}.png`;
-        const { error: uploadError } = await db.storage.from("undangan-assets").upload(ticketPath, ticketBytes, { contentType: "image/png", upsert: false });
-        if (uploadError) throw new Error("Gagal menyimpan file tiket");
-        const { data: publicTicket } = db.storage.from("undangan-assets").getPublicUrl(ticketPath);
-        const ticketUrl = publicTicket.publicUrl;
-        const { error: ticketUpdateError } = await db.from("registrations").update({ ticket_url: ticketUrl }).eq("id", saved.id);
-        if (ticketUpdateError) throw new Error("Gagal memperbarui tautan tiket");
-        await db.from("bot_registration_sessions").delete().eq("phone", phone);
-        await sendText(phone, `Terima Kasih, pendaftaran Anda berhasil.\nNo Register: ${registrationNo}\nTiket berlaku untuk 2 orang. Berikut tiket masuk Anda.`);
-        await sendImage(phone, ticketUrl, `TIKET MASUK - ${registrationNo} (berlaku untuk 2 orang)`, registrationNo);
-        return json({ accepted: true, registration_no: registrationNo, ticket_url: ticketUrl });
-      }
+    if(normalized==="3"){
+      const {data:event,error}=await db.from("invite_campaigns").select("id,event_title,name").eq("is_active",true).gte("event_date",now).order("event_date",{ascending:true}).limit(1).maybeSingle();
+      if(error) throw error;
+      if(!event){await sendText(phone,"Belum ada acara yang akan berlangsung.");return json({accepted:true,event_found:false});}
+      const {data:rows,error:rowsError}=await db.from("registrations").select("registration_no,name,created_at").eq("campaign_id",event.id).eq("status","registered").order("created_at",{ascending:true}).limit(100);
+      if(rowsError) throw rowsError;
+      const lines=(rows||[]).map((r,n)=>(n+1)+". "+r.name+" ("+r.registration_no+")");
+      await saveState("idle",event.id);
+      await sendText(phone,"DAFTAR HADIR\n"+(event.event_title||event.name)+"\n\n"+(lines.length?lines.join("\n"):"Belum ada peserta yang mendaftar.")+"\n\nJumlah terdaftar: "+(rows||[]).length+" orang"+((rows||[]).length===100?"\nMenampilkan maksimal 100 pendaftar.":""));
+      return json({accepted:true,attendee_count:(rows||[]).length});
     }
-
-
-    return json({ ignored: true, reason: "No active registration flow" });
-  } catch (error) {
-    console.error("Webhook processing failed:", error instanceof Error ? error.message : "unknown");
-    return json({ error: "Processing failed" }, 500);
-  }
+    await sendText(phone,menu);
+    return json({accepted:true,hint:"send_Menu_or_choose_1_2_3"});
+  }catch(error){console.error("Webhook processing failed:",error instanceof Error?error.message:"unknown");return json({error:"Processing failed"},500);}
 });
