@@ -232,8 +232,7 @@ async function sendImage(phone: string, imageUrl: string, caption: string, refId
   if (!response.ok || result.status !== true) {
     const reason = typeof result.message === "string" ? result.message.slice(0, 240) : "Respons bukan JSON";
     console.error("WABLAS_SEND_IMAGE_REJECTED", JSON.stringify({ http_status: response.status, api_status: result.status ?? null, reason }));
-    await sendText(phone, (caption ? caption + "\n\n" : "") + "Gambar undangan dapat dibuka melalui tautan berikut:\n" + imageUrl);
-    return { status: true, fallback: "image_link", original_http_status: response.status };
+    throw new Error(`Wablas gagal mengirim gambar (HTTP ${response.status}): ${reason}`);
   }
   console.log("WABLAS_SEND_IMAGE_ACCEPTED", JSON.stringify({ http_status: response.status }));
   return result;
