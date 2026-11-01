@@ -308,6 +308,8 @@ Deno.serve(async(req)=>{
         const {error:uploadError}=await db.storage.from("undangan-assets").upload(path,png,{contentType:"image/png",upsert:false});
         if(uploadError) throw uploadError;
         const {data:publicImage}=db.storage.from("undangan-assets").getPublicUrl(path);
+        const {error:imageUrlError}=await db.from("invite_campaigns").update({invitation_image_url:publicImage.publicUrl}).eq("id",created.id);
+        if(imageUrlError) throw imageUrlError;
         await sendImage(phone,publicImage.publicUrl,"UNDANGAN ACARA\n"+created.event_title,"event-"+created.id);
         return json({accepted:true,event_id:created.id,image_sent:true});
       }catch(e){
@@ -333,7 +335,7 @@ Deno.serve(async(req)=>{
     }
     if(normalized==="3"){
       const {data:events,error}=await db.from("invite_campaigns")
-        .select("id,event_title,name,event_date")
+        .select("id,event_title,name,event_date,invitation_image_url")
         .eq("is_active",true)
         .gte("event_date",now)
         .order("event_date",{ascending:true});
@@ -344,12 +346,18 @@ Deno.serve(async(req)=>{
         return json({accepted:true,event_found:false});
       }
       await saveState("idle",events[0].id);
-      const lines=events.map((event)=>
-        (event.event_title||event.name)+"\n🔗 https://undanganwa.pages.dev/undangan/"+event.id
-      );
-      const message="Silakan Download Undangan melalui link berikut:\n\n"+lines.join("\n\n")+"\n\nTerima kasih.";
-      await sendText(phone,message);
-      return json({accepted:true,event_count:events.length,invitation_links_sent:true});
+      const eventsWithImage=events.filter((event)=>typeof event.invitation_image_url==="string"&&event.invitation_image_url.startsWith("https://"));
+      if(eventsWithImage.length===0){
+        await sendText(phone,"Gambar undangan belum tersedia di penyimpanan. Silakan hubungi admin untuk memperbarui gambar undangan.");
+        return json({accepted:true,event_count:events.length,image_found:false});
+      }
+      let sent=0;
+      for(const event of eventsWithImage){
+        await sendImage(phone,event.invitation_image_url,"UNDANGAN ACARA\n"+(event.event_title||event.name),"invitation-"+event.id);
+        sent++;
+      }
+      await sendText(phone,"Gambar undangan berhasil dikirim. Silakan buka atau unduh gambar yang terlampir.");
+      return json({accepted:true,event_count:events.length,images_sent:sent});
     }
     if(normalized==="4"){
       const {data:event,error}=await db.from("invite_campaigns").select("id,event_title,name").eq("is_active",true).gte("event_date",now).order("event_date",{ascending:true}).limit(1).maybeSingle();
