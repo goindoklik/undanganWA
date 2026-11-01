@@ -36,8 +36,10 @@ function normalizePhone(value: string) {
 }
 
 function parseForm(message: string) {
+  // WhatsApp copy/paste can insert zero-width Unicode characters inside field labels.
+  const cleaned = message.replace(/[\u200B-\u200D\uFEFF]/g, "");
   const result: Record<string, string> = {};
-  for (const line of message.split(/\r?\n/)) {
+  for (const line of cleaned.split(/\r?\n/)) {
     const match = line.match(/^\s*(nama|no\s*wa|alamat|pengundang)\s*:\s*(.*)$/i);
     if (match) {
       const key = match[1].toLowerCase().replace(/\s/g, "");
