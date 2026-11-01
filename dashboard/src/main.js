@@ -220,11 +220,20 @@ async function buildInvitationDataUrl(event) {
     const venueMaxWidth = 255 * sx;
     let venueFont = Math.round(19 * sx);
     ctx.font = "700 " + venueFont + "px Poppins, Arial, sans-serif";
-    while (ctx.measureText(venueText).width > venueMaxWidth && venueFont > Math.round(13 * sx)) {
+    // Pisahkan nama tempat agar "Rumah Makan GG Palasah" tampil dalam dua baris.
+    const venueLines = venueText === "Rumah Makan GG Palasah"
+      ? ["Rumah Makan", "GG Palasah"]
+      : [venueText];
+    while (venueLines.some(line => ctx.measureText(line).width > venueMaxWidth) && venueFont > Math.round(13 * sx)) {
       venueFont -= 1;
       ctx.font = "700 " + venueFont + "px Poppins, Arial, sans-serif";
     }
-    ctx.fillText(venueText, venueX, 750 * sy, venueMaxWidth);
+    if (venueLines.length === 2) {
+      ctx.fillText(venueLines[0], venueX, 738 * sy, venueMaxWidth);
+      ctx.fillText(venueLines[1], venueX, 762 * sy, venueMaxWidth);
+    } else {
+      ctx.fillText(venueText, venueX, 750 * sy, venueMaxWidth);
+    }
   }
 
   ctx.shadowBlur = 0;
