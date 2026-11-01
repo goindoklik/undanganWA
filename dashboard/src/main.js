@@ -228,12 +228,14 @@ async function buildInvitationDataUrl(event) {
       venueFont -= 1;
       ctx.font = "700 " + venueFont + "px Poppins, Arial, sans-serif";
     }
+    ctx.textAlign = "left";
     if (venueLines.length === 2) {
       ctx.fillText(venueLines[0], venueX, 738 * sy, venueMaxWidth);
       ctx.fillText(venueLines[1], venueX, 762 * sy, venueMaxWidth);
     } else {
       ctx.fillText(venueText, venueX, 750 * sy, venueMaxWidth);
     }
+    ctx.textAlign = "center";
   }
 
   ctx.shadowBlur = 0;
