@@ -345,9 +345,9 @@ Deno.serve(async(req)=>{
       }
       await saveState("idle",events[0].id);
       const lines=events.map((event,index)=>
-        (index+1)+". "+(event.event_title||event.name)+"\\nhttps://undanganwa.pages.dev/undangan/"+event.id
+        (index+1)+". "+(event.event_title||event.name)+"\nhttps://undanganwa.pages.dev/undangan/"+event.id
       );
-      const message="Silakan Download Undangan:\\n\\n"+lines.join("\\n\\n");
+      const message="Silakan Download Undangan:\n\n"+lines.join("\n\n");
       await sendText(phone,message);
       return json({accepted:true,event_count:events.length,invitation_links_sent:true});
     }
