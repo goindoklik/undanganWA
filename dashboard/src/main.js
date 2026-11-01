@@ -180,24 +180,37 @@ async function buildInvitationDataUrl(event) {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Browser tidak mendukung pembuatan gambar.");
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-  const w = canvas.width, h = canvas.height, band = Math.round(h * .32), y = h - band;
-  const x = Math.round(w * .05), titleSize = Math.max(20, Math.round(w * .034)), detailSize = Math.max(16, Math.round(w * .024));
-  ctx.fillStyle = "rgba(7,21,43,.90)";
-  ctx.fillRect(0, y, w, band);
-  ctx.textBaseline = "alphabetic";
-  ctx.font = "700 " + titleSize + "px Poppins, Arial, sans-serif";
-  ctx.fillStyle = "#ffe27b";
-  drawWrappedText(ctx, event.event_title || event.name || "Undangan Acara", x, y + titleSize * 1.35, w * .9, titleSize * 1.12, 1);
-  ctx.font = "500 " + detailSize + "px Poppins, Arial, sans-serif";
+
+  // Isi tanggal dan pukul tepat di dalam dua kolom informasi pada template.
+  // Koordinat mengikuti kanvas asli 1024 x 1536 dan ikut menyesuaikan skala.
+  const w = canvas.width, h = canvas.height;
+  const sx = w / 1024, sy = h / 1536;
+  const eventDate = new Date(event.event_date);
+  if (Number.isNaN(eventDate.getTime())) throw new Error("Tanggal acara tidak valid.");
+
+  const weekday = new Intl.DateTimeFormat("id-ID", {
+    weekday: "long", timeZone: "Asia/Jakarta"
+  }).format(eventDate);
+  const dateText = invitationDate(event.event_date);
+  const timeText = invitationTime(event.event_date);
+
   ctx.fillStyle = "#ffffff";
-  const rows = [
-    "TANGGAL: " + invitationDate(event.event_date),
-    "PUKUL: " + invitationTime(event.event_date),
-    "TEMPAT: " + (event.venue || "-")
-  ];
-  rows.forEach((line, i) => {
-    ctx.fillText(line, x, y + titleSize * (2.55 + i * 1.1));
-  });
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.shadowColor = "rgba(0,0,0,.65)";
+  ctx.shadowBlur = 3 * sx;
+
+  // Kolom tanggal: di bawah label TANGGAL, di sebelah kanan ikon kalender.
+  ctx.font = "700 " + Math.round(19 * sx) + "px Poppins, Arial, sans-serif";
+  ctx.fillText(weekday, 250 * sx, 735 * sy, 205 * sx);
+  ctx.font = "600 " + Math.round(18 * sx) + "px Poppins, Arial, sans-serif";
+  ctx.fillText(dateText, 250 * sx, 765 * sy, 205 * sx);
+
+  // Kolom waktu: di bawah label PUKUL, di sebelah kanan ikon jam.
+  ctx.font = "700 " + Math.round(21 * sx) + "px Poppins, Arial, sans-serif";
+  ctx.fillText(timeText, 548 * sx, 750 * sy, 145 * sx);
+
+  ctx.shadowBlur = 0;
   return canvas.toDataURL("image/png");
 }
 async function showEventInvitation(eventId) {
