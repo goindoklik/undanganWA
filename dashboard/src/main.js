@@ -195,18 +195,21 @@ async function buildInvitationDataUrl(event) {
   const timeText = invitationTime(event.event_date);
 
   ctx.fillStyle = "#ffffff";
-  ctx.textAlign = "center";
+  ctx.textAlign = "left";
   ctx.textBaseline = "middle";
   ctx.shadowColor = "rgba(0,0,0,.65)";
   ctx.shadowBlur = 3 * sx;
 
-  // Kolom tanggal: di bawah label TANGGAL, di sebelah kanan ikon kalender.
+  // Kolom tanggal: nama hari dan tanggal rata kiri pada satu garis awal.
+  // Posisi kiri disamakan dengan tepi kiri area teks sebelumnya.
+  const dateX = 147.5 * sx;
   ctx.font = "700 " + Math.round(19 * sx) + "px Poppins, Arial, sans-serif";
-  ctx.fillText(weekday, 250 * sx, 735 * sy, 205 * sx);
+  ctx.fillText(weekday, dateX, 735 * sy, 205 * sx);
   ctx.font = "600 " + Math.round(18 * sx) + "px Poppins, Arial, sans-serif";
-  ctx.fillText(dateText, 250 * sx, 765 * sy, 205 * sx);
+  ctx.fillText(dateText, dateX, 765 * sy, 205 * sx);
 
-  // Kolom waktu: di bawah label PUKUL, di sebelah kanan ikon jam.
+  // Kolom waktu: tetap rata tengah di bawah label PUKUL.
+  ctx.textAlign = "center";
   ctx.font = "700 " + Math.round(21 * sx) + "px Poppins, Arial, sans-serif";
   ctx.fillText(timeText, 548 * sx, 750 * sy, 145 * sx);
 
