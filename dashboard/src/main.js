@@ -69,7 +69,7 @@ function stats() {
 
 async function loadEvents() {
   const { data, error } = await supabase.from("invite_campaigns")
-    .select("id,name,event_title,event_date,venue,is_active,created_at")
+    .select("id,name,event_title,event_date,venue,is_active,created_at,invitation_image_url")
     .order("event_date", { ascending: false });
   if (error) throw error;
   eventRecords = data || [];
@@ -84,12 +84,12 @@ function eventStatus(event) {
 function eventsView(events) {
   return `<section class="panel">
     <div class="panel-head"><div><h2>Data Acara</h2><p class="muted">Seluruh acara yang sudah dan akan berlangsung.</p></div><button class="primary compact" id="add-event">+ Tambah Acara</button></div>
-    <div id="event-form-wrap"></div>
+    <div id="event-form-wrap"></div><div id="event-invitation-wrap"></div>
     ${events.length ? `<div class="table-wrap"><table><thead><tr><th>Nama Acara</th><th>Waktu Acara</th><th>Pukul</th><th>Tempat</th><th>Registrasi</th><th>Status</th><th>Aksi</th></tr></thead><tbody>
     ${events.map(ev => {
       const d = ev.event_date ? new Date(ev.event_date) : null;
       const count = registrations.filter(r => r.campaign_id === ev.id).length;
-      return `<tr><td><b>${esc(ev.event_title || ev.name)}</b></td><td>${d ? d.toLocaleDateString("id-ID",{dateStyle:"long",timeZone:"Asia/Jakarta"}) : "-"}</td><td>${d ? d.toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Jakarta"})+" WIB" : "-"}</td><td>${esc(ev.venue || "-")}</td><td>${count} orang</td><td><span class="status">${eventStatus(ev)}</span></td><td><button class="outline compact edit-event" data-id="${ev.id}">Edit</button> <button class="outline compact delete-event" data-id="${ev.id}">Hapus</button></td></tr>`;
+      return `<tr><td><b>${esc(ev.event_title || ev.name)}</b></td><td>${d ? d.toLocaleDateString("id-ID",{dateStyle:"long",timeZone:"Asia/Jakarta"}) : "-"}</td><td>${d ? d.toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Jakarta"})+" WIB" : "-"}</td><td>${esc(ev.venue || "-")}</td><td>${count} orang</td><td><span class="status">${eventStatus(ev)}</span></td><td><button class="outline compact invitation-event" data-id="${ev.id}">Undangan</button> <button class="outline compact edit-event" data-id="${ev.id}">Edit</button> <button class="outline compact delete-event" data-id="${ev.id}">Hapus</button></td></tr>`;
     }).join("")}
     </tbody></table></div>` : '<div class="empty">Belum ada acara. Klik Tambah Acara untuk membuat acara pertama.</div>'}
   </section>`;
@@ -135,6 +135,111 @@ async function saveEvent(e, eventId = null) {
     return;
   }
   await showView("events");
+}
+
+
+function invitationDate(value) {
+  return new Intl.DateTimeFormat("id-ID", { day:"numeric", month:"long", year:"numeric", timeZone:"Asia/Jakarta" }).format(new Date(value));
+}
+function invitationTime(value) {
+  return new Intl.DateTimeFormat("id-ID", { hour:"2-digit", minute:"2-digit", hourCycle:"h23", timeZone:"Asia/Jakarta" }).format(new Date(value)) + " WIB";
+}
+function loadInvitationTemplate(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Template undangan tidak dapat dimuat. Periksa koneksi internet."));
+    image.src = url;
+  });
+}
+function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
+  const words = String(text || "").split(/\\s+/);
+  let line = "", lines = [];
+  for (const word of words) {
+    const test = line ? line + " " + word : word;
+    if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = word; }
+    else line = test;
+  }
+  if (line) lines.push(line);
+  if (lines.length > maxLines) {
+    lines = lines.slice(0, maxLines);
+    let last = lines[maxLines - 1];
+    while (last && ctx.measureText(last + "…").width > maxWidth) last = last.slice(0, -1);
+    lines[maxLines - 1] = last + "…";
+  }
+  lines.forEach((item, index) => ctx.fillText(item, x, y + index * lineHeight));
+}
+async function buildInvitationDataUrl(event) {
+  const templateUrl = event.invitation_image_url || "https://raw.githubusercontent.com/goindoklik/undanganWA/main/Gambar/Undangan.png";
+  const image = await loadInvitationTemplate(templateUrl);
+  const scale = Math.min(2400 / image.naturalWidth, 2400 / image.naturalHeight, 1);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(320, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(320, Math.round(image.naturalHeight * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Browser tidak mendukung pembuatan gambar.");
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const w = canvas.width, h = canvas.height, band = Math.round(h * .32), y = h - band;
+  const x = Math.round(w * .05), titleSize = Math.max(20, Math.round(w * .034)), detailSize = Math.max(16, Math.round(w * .024));
+  ctx.fillStyle = "rgba(7,21,43,.90)";
+  ctx.fillRect(0, y, w, band);
+  ctx.textBaseline = "alphabetic";
+  ctx.font = "700 " + titleSize + "px Poppins, Arial, sans-serif";
+  ctx.fillStyle = "#ffe27b";
+  drawWrappedText(ctx, event.event_title || event.name || "Undangan Acara", x, y + titleSize * 1.35, w * .9, titleSize * 1.12, 1);
+  ctx.font = "500 " + detailSize + "px Poppins, Arial, sans-serif";
+  ctx.fillStyle = "#ffffff";
+  const rows = [
+    "TANGGAL: " + invitationDate(event.event_date),
+    "PUKUL: " + invitationTime(event.event_date),
+    "TEMPAT: " + (event.venue || "-")
+  ];
+  rows.forEach((line, i) => {
+    ctx.fillText(line, x, y + titleSize * (2.55 + i * 1.1));
+  });
+  return canvas.toDataURL("image/png");
+}
+async function showEventInvitation(eventId) {
+  const event = eventRecords.find(item => item.id === eventId);
+  const wrap = document.querySelector("#event-invitation-wrap");
+  if (!event || !wrap) return;
+  wrap.innerHTML = '<section class="panel invitation-panel"><div class="panel-head"><div><h2>Undangan Acara</h2><p class="muted">Gambar undangan dibuat dari data acara ini.</p></div><button type="button" class="outline compact" id="close-invitation">Tutup</button></div><div class="loading">Membuat gambar undangan...</div></section>';
+  wrap.scrollIntoView({behavior:"smooth",block:"start"});
+  document.querySelector("#close-invitation").onclick = () => { wrap.innerHTML = ""; };
+  try {
+    const dataUrl = await buildInvitationDataUrl(event);
+    wrap.innerHTML = '<section class="panel invitation-panel"><div class="panel-head"><div><h2>Undangan Acara</h2><p class="muted">' + esc(event.event_title || event.name) + '</p></div><button type="button" class="outline compact" id="close-invitation">Tutup</button></div><div class="invitation-preview"><img id="invitation-image" alt="Gambar undangan acara"></div><div class="invitation-actions"><button type="button" class="primary" id="download-invitation">Download Gambar</button><button type="button" class="outline" id="share-invitation">Bagikan ke WhatsApp</button></div><p class="muted invitation-hint">Jika tombol bagikan tidak tersedia di perangkat, download gambar lalu lampirkan secara manual di WhatsApp.</p></section>';
+    const img = document.querySelector("#invitation-image");
+    img.src = dataUrl;
+    document.querySelector("#close-invitation").onclick = () => { wrap.innerHTML = ""; };
+    document.querySelector("#download-invitation").onclick = () => {
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = "Undangan-" + String(event.event_title || event.name || "Acara").replace(/[^a-z0-9-_]+/gi, "-") + ".png";
+      a.click();
+    };
+    document.querySelector("#share-invitation").onclick = async () => {
+      try {
+        const blob = await (await fetch(dataUrl)).blob();
+        const file = new File([blob], "Undangan-" + String(event.event_title || "Acara").replace(/[^a-z0-9-_]+/gi, "-") + ".png", {type:"image/png"});
+        if (navigator.canShare && navigator.canShare({files:[file]}) && navigator.share) {
+          await navigator.share({title:"Undangan Acara", text:"Undangan " + (event.event_title || event.name), files:[file]});
+        } else {
+          const message = "Undangan " + (event.event_title || event.name) + "\\n" + invitationDate(event.event_date) + " · " + invitationTime(event.event_date) + "\\n" + (event.venue || "");
+          window.open("https://wa.me/?text=" + encodeURIComponent(message), "_blank", "noopener");
+          alert("Perangkat ini belum mendukung berbagi gambar langsung. Gambar sudah siap; silakan download lalu lampirkan di WhatsApp.");
+        }
+      } catch (error) {
+        if (error?.name !== "AbortError") alert("Gagal membuka menu berbagi. Silakan download gambar.");
+      }
+    };
+  } catch (error) {
+    console.error("Gagal membuat gambar undangan:", error);
+    wrap.innerHTML = '<section class="panel"><div class="panel-head"><div><h2>Undangan Acara</h2><p class="muted">Gambar undangan belum berhasil dibuat.</p></div><button type="button" class="outline compact" id="close-invitation">Tutup</button></div><div class="notice error">' + esc(error.message || "Terjadi kesalahan saat membuat gambar.") + '</div><button type="button" class="outline compact" id="retry-invitation">Coba Lagi</button></section>';
+    document.querySelector("#close-invitation").onclick = () => { wrap.innerHTML = ""; };
+    document.querySelector("#retry-invitation").onclick = () => showEventInvitation(eventId);
+  }
 }
 
 async function deleteEvent(eventId) {
@@ -289,6 +394,7 @@ async function showView(view) {
         document.querySelector("#event-form").addEventListener("submit", e => saveEvent(e));
         document.querySelector("#cancel-event").onclick = () => document.querySelector("#event-form-wrap").innerHTML = "";
       };
+      document.querySelectorAll(".invitation-event").forEach(button => button.onclick = () => showEventInvitation(button.dataset.id));
       document.querySelectorAll(".edit-event").forEach(button => button.onclick = () => {
         const event = events.find(ev => ev.id === button.dataset.id);
         document.querySelector("#event-form-wrap").innerHTML = eventForm(event);
