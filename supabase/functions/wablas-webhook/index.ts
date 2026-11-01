@@ -94,7 +94,7 @@ function createTicketPng(name: string, phone: string, address: string, registrat
     <text x="400" y="244" fill="url(#gold)" font-family="Georgia,serif" font-size="65" font-weight="900" text-anchor="middle">UNDANGAN BISNIS</text>
     <path d="M92 290H710" stroke="url(#gold)" stroke-width="2"/>
     <path d="M120 300L690 300L665 352L95 352Z" fill="url(#red)"/>
-    <text x="390" y="337" fill="#fff" font-family="Arial,sans-serif" font-size=" thirty" font-size="31" font-weight="900" font-style="italic" text-anchor="middle">ACARA OFFLINE BESAR</text>
+    <text x="390" y="337" fill="#fff" font-family="Arial,sans-serif" font-size="31" font-weight="900" font-style="italic" text-anchor="middle">ACARA OFFLINE BESAR</text>
     <text x="390" y="397" fill="#fff" font-family="Arial,sans-serif" font-size="24" font-weight="700" text-anchor="middle">Saatnya Bergabung, Bangun Jaringan,</text>
     <text x="390" y="428" fill="#fff" font-family="Arial,sans-serif" font-size="24" font-weight="700" text-anchor="middle">Raih Kesempatan Tanpa Batas!</text>
     <rect x="55" y="460" width="710" height="132" rx="24" fill="#07162d" stroke="url(#gold)" stroke-width="6"/>
