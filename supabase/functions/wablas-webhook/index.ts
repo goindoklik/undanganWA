@@ -358,7 +358,133 @@ Deno.serve(async (req) => {
       return json({ accepted: true, rsvp: "registered", ticket_url: ticketUrl });
     }
 
+    // Alur pendaftaran bertahap baru untuk kata kunci DAFTAR.
     if (normalized === "daftar") {
+      const { data: campaign } = await db.from("invite_campaigns")
+        .select("id,event_title,name,event_date,venue")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!campaign) {
+        await sendText(phone, "Pendaftaran belum tersedia karena belum ada acara aktif. Silakan hubungi admin acara.");
+        return json({ accepted: false, reason: "campaign_unavailable" });
+      }
+      const { data: sentInvitation } = await db.from("invitations")
+        .select("id,inviter_name")
+        .eq("phone", phone)
+        .eq("campaign_id", campaign.id)
+        .order("sent_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const { error: sessionError } = await db.from("bot_registration_sessions").upsert({
+        phone,
+        campaign_id: campaign.id,
+        invitation_id: sentInvitation?.id || null,
+        inviter: sentInvitation?.inviter_name || "Pendaftaran Mandiri",
+        step: "confirm",
+        name: null,
+        whatsapp: null,
+        updated_at: new Date().toISOString(),
+      });
+      if (sessionError) throw new Error("Gagal memulai sesi pendaftaran");
+      const eventName = campaign.event_title || campaign.name || "Acara";
+      await sendText(phone, `Pendaftaran untuk ${eventName}\n\nBalas Y : Untuk Melanjutkan\nBalas N : Untuk stop`);
+      return json({ accepted: true, state: "confirm", campaign_id: campaign.id });
+    }
+
+    // Sesi pendaftaran baru disimpan terpisah agar menu DAFTAR LAMA tetap tersedia.
+    const { data: registrationSession } = await db.from("bot_registration_sessions")
+      .select("*")
+      .eq("phone", phone)
+      .maybeSingle();
+
+    if (registrationSession) {
+      const answer = text.trim();
+      const step = registrationSession.step;
+      if (step === "confirm") {
+        if (/^y$/i.test(answer)) {
+          await db.from("bot_registration_sessions").update({ step: "name", updated_at: new Date().toISOString() }).eq("phone", phone);
+          await sendText(phone, "Masukan Nama Lengkap Anda");
+          return json({ accepted: true, state: "name" });
+        }
+        if (/^n$/i.test(answer)) {
+          await db.from("bot_registration_sessions").delete().eq("phone", phone);
+          await sendText(phone, "Terima Kasih atas Partipasi anda");
+          return json({ accepted: true, cancelled: true });
+        }
+        return json({ ignored: true, reason: "expected_y_or_n" });
+      }
+
+      if (step === "name") {
+        if (!answer) return json({ ignored: true, reason: "empty_name" });
+        await db.from("bot_registration_sessions").update({ name: answer, step: "whatsapp", updated_at: new Date().toISOString() }).eq("phone", phone);
+        await sendText(phone, "Masukan No WhatsApp Anda");
+        return json({ accepted: true, state: "whatsapp" });
+      }
+
+      if (step === "whatsapp") {
+        const registrantPhone = normalizePhone(answer);
+        if (!/^62[0-9]{8,13}$/.test(registrantPhone)) return json({ ignored: true, reason: "invalid_whatsapp" });
+        await db.from("bot_registration_sessions").update({ whatsapp: registrantPhone, step: "address", updated_at: new Date().toISOString() }).eq("phone", phone);
+        await sendText(phone, "Alamat Anda: Silakan isi nama kabupaten.");
+        return json({ accepted: true, state: "address" });
+      }
+
+      if (step === "address") {
+        const address = answer;
+        if (!address) return json({ ignored: true, reason: "empty_address" });
+        const registrantPhone = registrationSession.whatsapp;
+        const { data: existing } = await db.from("registrations")
+          .select("registration_no")
+          .eq("whatsapp", registrantPhone)
+          .eq("status", "registered")
+          .maybeSingle();
+        if (existing) {
+          await db.from("bot_registration_sessions").delete().eq("phone", phone);
+          await sendText(phone, `Nomor WhatsApp ini sudah terdaftar dengan No Register ${existing.registration_no}.`);
+          return json({ accepted: true, duplicate_registration: true });
+        }
+
+        const { data: event, error: eventError } = await db.from("invite_campaigns")
+          .select("event_title,name,event_date,venue")
+          .eq("id", registrationSession.campaign_id)
+          .maybeSingle();
+        if (eventError || !event?.event_date || !event?.venue) throw new Error("Data acara untuk tiket tidak ditemukan atau belum lengkap");
+        const { data: registrationNo, error: numberError } = await db.rpc("make_registration_no");
+        if (numberError || !registrationNo) throw new Error("Gagal membuat nomor registrasi");
+        const name = registrationSession.name || "";
+        const inviter = registrationSession.inviter || "Pendaftaran Mandiri";
+        const { data: saved, error: insertError } = await db.from("registrations").insert({
+          registration_no: registrationNo,
+          campaign_id: registrationSession.campaign_id,
+          invitation_id: registrationSession.invitation_id,
+          name,
+          whatsapp: registrantPhone,
+          address,
+          inviter,
+          inviter_whatsapp: registrationSession.inviter_whatsapp || null,
+          guest_count: 2,
+        }).select("id").single();
+        if (insertError || !saved) throw new Error("Gagal menyimpan registrasi");
+
+        const ticketBytes = createTicketPng(name, registrantPhone, address, registrationNo, inviter, event.event_title || event.name || "Undangan Acara", event.event_date, event.venue);
+        if (ticketBytes.byteLength > 2 * 1024 * 1024) throw new Error("Ukuran tiket melebihi batas Wablas 2 MB");
+        const ticketPath = `tickets/${registrationNo}.png`;
+        const { error: uploadError } = await db.storage.from("undangan-assets").upload(ticketPath, ticketBytes, { contentType: "image/png", upsert: false });
+        if (uploadError) throw new Error("Gagal menyimpan file tiket");
+        const { data: publicTicket } = db.storage.from("undangan-assets").getPublicUrl(ticketPath);
+        const ticketUrl = publicTicket.publicUrl;
+        const { error: ticketUpdateError } = await db.from("registrations").update({ ticket_url: ticketUrl }).eq("id", saved.id);
+        if (ticketUpdateError) throw new Error("Gagal memperbarui tautan tiket");
+        await db.from("bot_registration_sessions").delete().eq("phone", phone);
+        await sendText(phone, `Terima Kasih, pendaftaran Anda berhasil.\nNo Register: ${registrationNo}\nTiket berlaku untuk 2 orang. Berikut tiket masuk Anda.`);
+        await sendImage(phone, ticketUrl, `TIKET MASUK - ${registrationNo} (berlaku untuk 2 orang)`, registrationNo);
+        return json({ accepted: true, registration_no: registrationNo, ticket_url: ticketUrl });
+      }
+    }
+
+    if (normalized === "daftar lama") {
       // Associate this registration flow with the invitation/event sent to this WhatsApp number.
       const { data: sentInvitation } = await db.from("invitations")
         .select("id,campaign_id,inviter_name")
