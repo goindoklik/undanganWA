@@ -71,27 +71,69 @@ function xml(value: string) {
   return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]!));
 }
 
-function createTicketPng(name: string, phone: string, address: string, registrationNo: string) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
-    <rect width="1200" height="675" fill="#101d38"/>
-    <rect x="22" y="22" width="1156" height="631" rx="28" fill="none" stroke="#c9a75e" stroke-width="3"/>
-    <text x="600" y="112" fill="#e8c77a" font-family="Inter" font-size="42" font-weight="700" text-anchor="middle">UNDANGAN KHUSUS</text>
-    <text x="600" y="166" fill="#ffffff" font-family="Inter" font-size="26" text-anchor="middle">TIKET MASUK ACARA</text>
-    <path d="M100 205 H1100" stroke="#9d8550" stroke-width="2"/>
-    <text x="100" y="255" fill="#e8c77a" font-family="Inter" font-size="19">NO REGISTER</text>
-    <text x="100" y="312" fill="#ffffff" font-family="Inter" font-size="43" font-weight="700">${xml(registrationNo)}</text>
-    <text x="100" y="378" fill="#e8c77a" font-family="Inter" font-size="18">NAMA</text>
-    <text x="100" y="416" fill="#ffffff" font-family="Inter" font-size="27" font-weight="700">${xml(name.slice(0,42))}</text>
-    <text x="100" y="468" fill="#e8c77a" font-family="Inter" font-size="18">NO WA</text>
-    <text x="100" y="505" fill="#ffffff" font-family="Inter" font-size="23">${xml(phone)}</text>
-    <text x="650" y="378" fill="#e8c77a" font-family="Inter" font-size="18">ALAMAT</text>
-    <text x="650" y="416" fill="#ffffff" font-family="Inter" font-size="23">${xml(address.slice(0,48))}</text>
-    <rect x="100" y="545" width="1000" height="58" rx="12" fill="#c9a75e"/>
-    <text x="600" y="583" fill="#101d38" font-family="Inter" font-size="27" font-weight="700" text-anchor="middle">BERLAKU UNTUK 2 ORANG</text>
+function createTicketPng(name: string, phone: string, address: string, registrationNo: string, inviter: string) {
+  const short = (value: string, max: number) => xml(value.length > max ? value.slice(0, max - 1) + "…" : value);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+    <defs>
+      <linearGradient id="navy" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#061329"/><stop offset=".55" stop-color="#102b55"/><stop offset="1" stop-color="#061329"/></linearGradient>
+      <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff0a4"/><stop offset=".28" stop-color="#d9a72e"/><stop offset=".58" stop-color="#fff2a8"/><stop offset="1" stop-color="#a66b0c"/></linearGradient>
+      <linearGradient id="red" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#a90918"/><stop offset=".5" stop-color="#f02d37"/><stop offset="1" stop-color="#9e0718"/></linearGradient>
+      <linearGradient id="cream" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff8df"/><stop offset="1" stop-color="#f4d98c"/></linearGradient>
+      <filter id="shadow"><feGaussianBlur stdDeviation="7"/></filter>
+    </defs>
+    <rect width="1200" height="800" rx="28" fill="#020918"/>
+    <rect x="14" y="14" width="1172" height="772" rx="24" fill="url(#navy)" stroke="url(#gold)" stroke-width="8"/>
+    <path d="M20 20H320L160 110H20Z M20 780H370L170 690H20Z" fill="url(#gold)" opacity=".95"/>
+    <path d="M35 145L390 25H780L520 155Z" fill="#1d4e91" opacity=".2"/>
+    <g opacity=".45" fill="#5fa7ff"><circle cx="710" cy="80" r="3"/><circle cx="770" cy="110" r="2"/><circle cx="820" cy="60" r="3"/><circle cx="890" cy="130" r="2"/><circle cx="650" cy="155" r="2"/></g>
+    <path d="M700 165L790 30L820 165L920 40L900 190L1040 85L960 220Z" fill="#1674e9" opacity=".15"/>
+    <text x="72" y="104" fill="#fff" font-family="Arial,sans-serif" font-size="72" font-weight="900" font-style="italic">Pilot<tspan fill="url(#gold)">X</tspan></text>
+    <text x="78" y="139" fill="#e8edf8" font-family="Arial,sans-serif" font-size="16" font-weight="700" letter-spacing="4">BERSAMA KITA BISA LEBIH SUKSES</text>
+    <text x="1090" y="72" fill="#fff0a4" font-family="Arial,sans-serif" font-size="25" font-style="italic" text-anchor="end">Saatnya Bersama PilotX</text>
+    <path d="M70 188L735 188L770 230L735 272H70L35 230Z" fill="#050d1e" stroke="url(#gold)" stroke-width="7"/>
+    <text x="400" y="244" fill="url(#gold)" font-family="Georgia,serif" font-size="65" font-weight="900" text-anchor="middle">UNDANGAN BISNIS</text>
+    <path d="M92 290H710" stroke="url(#gold)" stroke-width="2"/>
+    <path d="M120 300L690 300L665 352L95 352Z" fill="url(#red)"/>
+    <text x="390" y="337" fill="#fff" font-family="Arial,sans-serif" font-size=" thirty" font-size="31" font-weight="900" font-style="italic" text-anchor="middle">ACARA OFFLINE BESAR</text>
+    <text x="390" y="397" fill="#fff" font-family="Arial,sans-serif" font-size="24" font-weight="700" text-anchor="middle">Saatnya Bergabung, Bangun Jaringan,</text>
+    <text x="390" y="428" fill="#fff" font-family="Arial,sans-serif" font-size="24" font-weight="700" text-anchor="middle">Raih Kesempatan Tanpa Batas!</text>
+    <rect x="55" y="460" width="710" height="132" rx="24" fill="#07162d" stroke="url(#gold)" stroke-width="6"/>
+    <path d="M290 478V574M520 478V574" stroke="#e7c65d" stroke-width="3"/>
+    <text x="85" y="510" fill="#ffe27b" font-family="Arial,sans-serif" font-size="18" font-weight="700">TANGGAL</text>
+    <text x="85" y="550" fill="#fff" font-family="Arial,sans-serif" font-size="27" font-weight="900">31 OKTOBER 2026</text>
+    <text x="320" y="510" fill="#ffe27b" font-family="Arial,sans-serif" font-size="18" font-weight="700">PUKUL</text>
+    <text x="320" y="550" fill="#fff" font-family="Arial,sans-serif" font-size="30" font-weight="900">13.00 WIB</text>
+    <text x="550" y="510" fill="#ffe27b" font-family="Arial,sans-serif" font-size="18" font-weight="700">TEMPAT</text>
+    <text x="550" y="550" fill="#fff" font-family="Arial,sans-serif" font-size="24" font-weight="900">AULA LEUWIMUNDING</text>
+    <text x="78" y="640" fill="#fff" font-family="Arial,sans-serif" font-size="21">Kami mengundang Anda untuk hadir dalam acara besar</text>
+    <text x="78" y="672" fill="#fff" font-family="Arial,sans-serif" font-size="21">offline PilotX. Perluas jaringan, tambah wawasan,</text>
+    <text x="78" y="704" fill="#fff" font-family="Arial,sans-serif" font-size="21">dan raih peluang bisnis yang lebih besar.</text>
+    <text x="78" y="750" fill="#ffe27b" font-family="Arial,sans-serif" font-size="20" font-style="italic">Bersama PilotX — Kita tumbuh, kita maju, kita sukses!</text>
+    <path d="M800 20V780" stroke="#ffe28a" stroke-width="5" stroke-dasharray="14 12"/>
+    <rect x="825" y="35" width="335" height="730" rx="22" fill="url(#cream)" stroke="url(#gold)" stroke-width="5"/>
+    <rect x="842" y="52" width="301" height="78" rx="14" fill="url(#gold)"/>
+    <text x="992" y="85" fill="#09152b" font-family="Arial,sans-serif" font-size="26" font-weight="900" text-anchor="middle">TIKET UNDANGAN</text>
+    <text x="992" y="112" fill="#09152b" font-family="Arial,sans-serif" font-size="15" font-weight="700" text-anchor="middle">PILOTX BUSINESS EVENT</text>
+    <text x="992" y="166" fill="#07152d" font-family="Arial,sans-serif" font-size="19" font-weight="700" text-anchor="middle">NO. REGISTER</text>
+    <rect x="850" y="178" width="285" height="52" rx="10" fill="#071a39"/>
+    <text x="992" y="214" fill="#fff" font-family="Arial,sans-serif" font-size="27" font-weight="900" text-anchor="middle">${short(registrationNo, 18)}</text>
+    <text x="858" y="274" fill="#9a6c14" font-family="Arial,sans-serif" font-size="15" font-weight="700">NAMA</text>
+    <text x="858" y="305" fill="#07152d" font-family="Arial,sans-serif" font-size="22" font-weight="900">${short(name, 25)}</text>
+    <text x="858" y="350" fill="#9a6c14" font-family="Arial,sans-serif" font-size="15" font-weight="700">NO. WHATSAPP</text>
+    <text x="858" y="379" fill="#07152d" font-family="Arial,sans-serif" font-size="20" font-weight="700">${short(phone, 22)}</text>
+    <text x="858" y="425" fill="#9a6c14" font-family="Arial,sans-serif" font-size="15" font-weight="700">ALAMAT</text>
+    <text x="858" y="454" fill="#07152d" font-family="Arial,sans-serif" font-size="18" font-weight="700">${short(address, 29)}</text>
+    <text x="858" y="505" fill="#9a6c14" font-family="Arial,sans-serif" font-size="15" font-weight="700">PENGUNDANG</text>
+    <text x="858" y="534" fill="#07152d" font-family="Arial,sans-serif" font-size="19" font-weight="700">${short(inviter, 25)}</text>
+    <rect x="848" y="570" width="289" height="58" rx="12" fill="url(#gold)"/>
+    <text x="992" y="607" fill="#07152d" font-family="Arial,sans-serif" font-size="23" font-weight="900" text-anchor="middle">BERLAKU UNTUK 2 ORANG</text>
+    <rect x="890" y="650" width="205" height="76" rx="12" fill="#071a39"/>
+    <text x="992" y="680" fill="#ffe27b" font-family="Arial,sans-serif" font-size="17" font-weight="900" text-anchor="middle">TIKET RESMI</text>
+    <text x="992" y="706" fill="#fff" font-family="Arial,sans-serif" font-size="14" text-anchor="middle">Simpan untuk check-in</text>
   </svg>`;
   const pngBytes = new Resvg(svg).render().asPng();
   const bitmap = PNG.sync.read(Buffer.from(pngBytes));
-  return jpeg.encode({ data: bitmap.data, width: bitmap.width, height: bitmap.height }, 88).data;
+  return jpeg.encode({ data: bitmap.data, width: bitmap.width, height: bitmap.height }, 90).data;
 }
 
 async function sendImage(phone: string, imageUrl: string, caption: string, refId: string) {
@@ -202,7 +244,7 @@ Deno.serve(async (req) => {
       }).select("id").single();
       if (insertError || !saved) throw new Error("Gagal menyimpan registrasi");
 
-      const ticketBytes = createTicketPng(name, whatsapp, address, registrationNo);
+      const ticketBytes = createTicketPng(name, whatsapp, address, registrationNo, inviter);
       if (ticketBytes.byteLength > 2 * 1024 * 1024) throw new Error("Ukuran tiket melebihi batas Wablas 2 MB");
       const ticketPath = `tickets/${registrationNo}.jpg`;
       const { error: uploadError } = await db.storage.from("undangan-assets").upload(ticketPath, ticketBytes, {
