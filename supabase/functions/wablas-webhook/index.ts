@@ -262,7 +262,7 @@ Deno.serve(async (req) => {
     const inviteCommand = text.match(/^undang\s+(?:no\s*wa\s*=\s*)?([0-9+().\s-]+?)(?:\s+dari\s+([0-9+().\s-]+))?$/i);
     if (inviteCommand) {
       const { data: sender } = await db.from("authorized_senders")
-        .select("id,phone,display_name,is_active,daily_count,usage_date,last_command_at")
+        .select("id,phone,display_name,is_active")
         .eq("phone", phone).maybeSingle();
       if (!sender || !sender.is_active) {
         await sendText(phone, "Maaf, nomor WhatsApp Anda belum terdaftar atau sedang tidak diizinkan menggunakan perintah undangan. Hubungi admin acara.");
@@ -280,17 +280,6 @@ Deno.serve(async (req) => {
       }
 
       const now = new Date();
-      const jakartaDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
-      const lastCommand = sender.last_command_at ? new Date(sender.last_command_at).getTime() : 0;
-      if (lastCommand && now.getTime() - lastCommand < 60_000) {
-        await sendText(phone, "Tunggu minimal 60 detik sebelum mengirim perintah undangan berikutnya.");
-        return json({ accepted: false, reason: "cooldown" });
-      }
-      const dailyCount = sender.usage_date === jakartaDate ? Number(sender.daily_count || 0) : 0;
-      if (dailyCount >= 5) {
-        await sendText(phone, "Batas undangan Anda hari ini sudah mencapai 5 nomor. Silakan coba kembali besok.");
-        return json({ accepted: false, reason: "daily_limit" });
-      }
 
       const { data: campaign } = await db.from("invite_campaigns")
         .select("id,event_title,name,event_date,venue,invitation_image_url")
@@ -330,10 +319,7 @@ Deno.serve(async (req) => {
         const messageId = Array.isArray((sent as any).data) ? (sent as any).data[0]?.id || null : null;
         await db.from("invitations").update({ status: "sent", sent_at: now.toISOString(), wablas_message_id: messageId })
           .eq("campaign_id", campaign.id).eq("phone", targetPhone);
-        await db.from("authorized_senders").update({
-          daily_count: dailyCount + 1, usage_date: jakartaDate, last_command_at: now.toISOString(), updated_at: now.toISOString()
-        }).eq("id", sender.id);
-        await sendText(phone, `Undangan berhasil dikirim ke ${targetPhone}. Sisa kuota hari ini: ${4 - dailyCount} undangan.`);
+        await sendText(phone, `Undangan berhasil dikirim ke ${targetPhone}.`);
         return json({ accepted: true, invited: targetPhone, campaign_id: campaign.id });
       } catch (sendError) {
         await db.from("invitations").update({ status: "failed" }).eq("campaign_id", campaign.id).eq("phone", targetPhone);
