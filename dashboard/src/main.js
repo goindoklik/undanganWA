@@ -216,7 +216,7 @@ async function buildInvitationDataUrl(event) {
   // Kolom tempat: isi area di bawah label TEMPAT, di sisi kanan ikon lokasi.
   const venueText = String(event.venue || event.event_location || event.location || "").trim();
   if (venueText) {
-    const venueX = 745 * sx;
+    const venueX = 741 * sx;
     const venueMaxWidth = 255 * sx;
     let venueFont = Math.round(19 * sx);
     ctx.font = "700 " + venueFont + "px Poppins, Arial, sans-serif";
