@@ -7,6 +7,7 @@ const supabase = env.VITE_SUPABASE_URL && env.VITE_SUPABASE_ANON_KEY
   : null;
 const app = document.querySelector("#app");
 let registrations = [];
+let eventRecords = [];
 let currentUser = null;
 
 const esc = (s = "") => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
@@ -69,7 +70,8 @@ async function loadEvents() {
     .select("id,name,event_title,event_date,venue,is_active,created_at")
     .order("event_date", { ascending: false });
   if (error) throw error;
-  return data || [];
+  eventRecords = data || [];
+  return eventRecords;
 }
 
 function eventStatus(event) {
@@ -126,8 +128,8 @@ async function saveEvent(e) {
 
 function table(rows) {
   if (!rows.length) return '<div class="empty">Belum ada data registrasi.</div>';
-  return `<div class="table-wrap"><table><thead><tr><th>No. Register</th><th>Nama</th><th>WhatsApp</th><th>Pengundang</th><th>Tanggal</th><th>Status</th></tr></thead><tbody>
-  ${rows.map(r => `<tr><td class="mono">${esc(r.registration_no)}</td><td><b>${esc(r.name)}</b><small>${esc(r.address)}</small></td><td>${esc(r.whatsapp)}</td><td>${esc(r.inviter)}</td><td>${date(r.created_at)}</td><td><span class="status ${esc(r.status)}">${esc(r.status)}</span></td></tr>`).join("")}
+  return `<div class="table-wrap"><table><thead><tr><th>No. Register</th><th>Nama</th><th>WhatsApp</th><th>Pengundang</th><th>Acara</th><th>Tanggal</th><th>Status</th></tr></thead><tbody>
+  ${rows.map(r => `<tr><td class="mono">${esc(r.registration_no)}</td><td><b>${esc(r.name)}</b><small>${esc(r.address)}</small></td><td>${esc(r.whatsapp)}</td><td>${esc(r.inviter)}</td><td>${esc(eventRecords.find(ev => ev.id === r.campaign_id)?.event_title || eventRecords.find(ev => ev.id === r.campaign_id)?.name || "Belum terkait acara")}</td><td>${date(r.created_at)}</td><td><span class="status ${esc(r.status)}">${esc(r.status)}</span></td></tr>`).join("")}
   </tbody></table></div>`;
 }
 
