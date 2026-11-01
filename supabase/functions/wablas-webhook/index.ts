@@ -154,7 +154,7 @@ async function createTicketPng(name: string, phone: string, address: string, reg
     <text x="858" y="505" fill="#9a6c14" font-family="Poppins" font-size="15" font-weight="700">PENGUNDANG</text>
     <text x="858" y="534" fill="#07152d" font-family="Poppins" font-size="19" font-weight="700">${short(inviter, 25)}</text>
     <rect x="848" y="570" width="289" height="58" rx="12" fill="url(#gold)"/>
-    <text x="992" y="607" fill="#07152d" font-family="Poppins" font-size="23" font-weight="900" text-anchor="middle">BERLAKU UNTUK 2 ORANG</text>
+    <text x="992" y="607" fill="#07152d" font-family="Poppins" font-size="17" font-weight="900" text-anchor="middle" textLength="255" lengthAdjust="spacingAndGlyphs">BERLAKU UNTUK 2 ORANG</text>
     <rect x="890" y="650" width="205" height="76" rx="12" fill="#071a39"/>
     <text x="992" y="680" fill="#ffe27b" font-family="Poppins" font-size="17" font-weight="900" text-anchor="middle">TIKET RESMI</text>
     <text x="992" y="706" fill="#fff" font-family="Poppins" font-size="14" text-anchor="middle">Simpan untuk check-in</text>
