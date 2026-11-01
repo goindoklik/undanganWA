@@ -211,7 +211,7 @@ async function buildInvitationDataUrl(event) {
   // Kolom waktu: tetap rata tengah di bawah label PUKUL.
   ctx.textAlign = "center";
   ctx.font = "700 " + Math.round(21 * sx) + "px Poppins, Arial, sans-serif";
-  ctx.fillText(timeText, 548 * sx, 750 * sy, 145 * sx);
+  ctx.fillText(timeText, 528 * sx, 750 * sy, 145 * sx);
 
   // Kolom tempat: isi area di bawah label TEMPAT, di sisi kanan ikon lokasi.
   const venueText = String(event.venue || event.event_location || event.location || "").trim();
