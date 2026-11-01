@@ -286,7 +286,7 @@ Deno.serve(async(req)=>{
       const {error}=await db.from("bot_conversations").upsert({phone,push_name:payload.pushName||sender.display_name||null,state:next,campaign_id:campaignId,last_message_at:now,updated_at:now},{onConflict:"phone"});
       if(error) throw error;
     };
-    const menu="MENU BOT UNDANGAN\n\n1. Data Acara\n2. Buat Acara\n3. Daftar Hadir\n\nSilakan balas dengan angka 1, 2, atau 3.";
+    const menu="MENU BOT UNDANGAN\n\n1. Data Acara\n2. Buat Acara\n3. Undangan Acara\n4. Daftar Hadir\n\nSilakan balas dengan angka 1, 2, 3, atau 4.";
     if(normalized==="menu"){await saveState("idle");await sendText(phone,menu);return json({accepted:true,menu:true});}
     if(state==="await_event_format"){
       let parsed;
@@ -333,6 +333,26 @@ Deno.serve(async(req)=>{
       return json({accepted:true,state:"await_event_format"});
     }
     if(normalized==="3"){
+      const {data:event,error}=await db.from("invite_campaigns").select("id,event_title,name,event_date,venue,invitation_image_url").eq("is_active",true).gte("event_date",now).order("event_date",{ascending:true}).limit(1).maybeSingle();
+      if(error) throw error;
+      if(!event){await saveState("idle");await sendText(phone,"Belum ada undangan acara yang akan berlangsung.");return json({accepted:true,event_found:false});}
+      await saveState("idle",event.id);
+      try{
+        const templateUrl="https://raw.githubusercontent.com/goindoklik/undanganWA/main/Gambar/Undangan.png";
+        const png=await createInvitationImage(templateUrl,event.event_title||event.name,dateLabel(event.event_date),timeLabel(event.event_date),event.venue);
+        const path="event-invitations/"+event.id+"/resend-"+Date.now()+".png";
+        const {error:uploadError}=await db.storage.from("undangan-assets").upload(path,png,{contentType:"image/png",upsert:false});
+        if(uploadError) throw uploadError;
+        const {data:publicImage}=db.storage.from("undangan-assets").getPublicUrl(path);
+        await sendImage(phone,publicImage.publicUrl,"UNDANGAN ACARA\\n"+(event.event_title||event.name),"event-resend-"+event.id+"-"+Date.now());
+        return json({accepted:true,event_id:event.id,invitation_sent:true});
+      }catch(e){
+        console.error("RESEND_EVENT_INVITATION_FAILED",e instanceof Error?e.message:"unknown");
+        await sendText(phone,"Undangan acara belum berhasil dikirim. Silakan coba kembali beberapa saat lagi.");
+        return json({accepted:true,event_id:event.id,invitation_sent:false});
+      }
+    }
+    if(normalized==="4"){
       const {data:event,error}=await db.from("invite_campaigns").select("id,event_title,name").eq("is_active",true).gte("event_date",now).order("event_date",{ascending:true}).limit(1).maybeSingle();
       if(error) throw error;
       if(!event){await sendText(phone,"Belum ada acara yang akan berlangsung.");return json({accepted:true,event_found:false});}
@@ -340,10 +360,10 @@ Deno.serve(async(req)=>{
       if(rowsError) throw rowsError;
       const lines=(rows||[]).map((r,n)=>(n+1)+". "+r.name+" ("+r.registration_no+")");
       await saveState("idle",event.id);
-      await sendText(phone,"DAFTAR HADIR\n"+(event.event_title||event.name)+"\n\n"+(lines.length?lines.join("\n"):"Belum ada peserta yang mendaftar.")+"\n\nJumlah terdaftar: "+(rows||[]).length+" orang"+((rows||[]).length===100?"\nMenampilkan maksimal 100 pendaftar.":""));
+      await sendText(phone,"DAFTAR HADIR\\n"+(event.event_title||event.name)+"\\n\\n"+(lines.length?lines.join("\\n"):"Belum ada peserta yang mendaftar.")+"\\n\\nJumlah terdaftar: "+(rows||[]).length+" orang"+((rows||[]).length===100?"\\nMenampilkan maksimal 100 pendaftar.":""));
       return json({accepted:true,attendee_count:(rows||[]).length});
     }
     await sendText(phone,menu);
-    return json({accepted:true,hint:"send_Menu_or_choose_1_2_3"});
+    return json({accepted:true,hint:"send_Menu_or_choose_1_2_3_4"});
   }catch(error){console.error("Webhook processing failed:",error instanceof Error?error.message:"unknown");return json({error:"Processing failed"},500);}
 });
