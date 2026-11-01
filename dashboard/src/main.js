@@ -171,7 +171,7 @@ function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
   lines.forEach((item, index) => ctx.fillText(item, x, y + index * lineHeight));
 }
 async function buildInvitationDataUrl(event) {
-  const templateUrl = event.invitation_image_url || "https://cdn.jsdelivr.net/gh/goindoklik/undanganWA@main/Gambar/Undangan.png";
+  const templateUrl = "/Undangan.png";
   const image = await loadInvitationTemplate(templateUrl);
   const scale = Math.min(2400 / image.naturalWidth, 2400 / image.naturalHeight, 1);
   const canvas = document.createElement("canvas");
