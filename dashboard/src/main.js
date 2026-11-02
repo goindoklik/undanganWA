@@ -522,7 +522,12 @@ async function renderPublicInvitation() {
   }
   // WhatsApp/Wablas can insert zero-width characters into long links.
   // Remove them before validating the event slug.
-  const routeKey = decodeURIComponent(pathParts[1] || "").replace(/[\u200B-\u200D\uFEFF]/g, "");
+  // Remove invisible Unicode characters sometimes inserted by WhatsApp into links.
+  let routeKey = pathParts[1] || "";
+  try { routeKey = decodeURIComponent(routeKey); } catch { /* sanitize raw segment below */ }
+  routeKey = routeKey.replace(/[\u200B-\u200F\u2060\uFEFF]/g, "");
+  // /undangan is the canonical public invitation route.
+  if (pathParts[0] === "acara" && routeKey) history.replaceState(null, "", "/undangan/" + routeKey);
   const isLegacyId = /^[0-9a-f-]{36}$/i.test(routeKey);
   const isDateTimeSlug = /^\d{10}$/.test(routeKey);
   if (!isLegacyId && !isDateTimeSlug) {
