@@ -1,84 +1,44 @@
-# Bot WhatsApp Undangan
+# Undangan WA
 
-Aplikasi undangan dan registrasi tamu menggunakan Wablas, Supabase Edge Functions, Supabase Database/Storage, GitHub, dan Cloudflare Pages.
+Dashboard pengelolaan acara dan peserta. Proyek menggunakan GitHub, Cloudflare Pages, Supabase, dan Wablas.
 
 ## Arsitektur
 
-- **Wablas**: WhatsApp gateway untuk menerima pesan dan mengirim undangan/balasan.
-- **Supabase Edge Functions**: webhook inbound dan proses bot.
-- **Supabase Postgres**: kampanye, undangan, percakapan, registrasi, dan event webhook.
-- **Supabase Storage**: file JPG undangan dan tiket.
-- **Cloudflare Pages**: dashboard admin frontend saja. Tidak ada Cloudflare Workers.
-- **GitHub**: source code dan version control.
+- **Cloudflare Pages**: dashboard admin frontend.
+- **Supabase**: database, Storage, Auth, dan Edge Functions.
+- **Wablas**: gateway WhatsApp.
+- **GitHub**: source code.
 
 ## Struktur
 
-- `supabase/migrations/`: skema database dan RLS.
-- `supabase/functions/wablas-webhook/`: webhook pesan masuk Wablas.
-- `dashboard/`: dashboard admin Vite.
+- `dashboard/`: dashboard admin.
+- `supabase/functions/wablas-webhook/`: endpoint webhook Wablas.
+- `supabase/migrations/`: skema database.
 
-## Database
+## Status bot saat ini
 
-Jalankan migration `supabase/migrations/20261101000000_initial_schema.sql` pada project Supabase baru.
+**Seluruh perintah dan alur bot WhatsApp lama telah dinonaktifkan di source code.** Webhook hanya memvalidasi secret dan menerima payload; webhook tidak memproses perintah, tidak mengirim balasan, dan tidak mengubah data acara maupun peserta.
 
-Setelah membuat akun admin melalui Supabase Auth, daftarkan UUID admin melalui SQL Editor:
+Bot akan dibangun ulang dari nol setelah rancangan perintah baru disepakati.
 
-```sql
-insert into public.admin_users (user_id, display_name)
-values ('UUID_USER_AUTH', 'Administrator');
-```
+Untuk mengaktifkan kondisi nonaktif ini di server, deploy ulang Edge Function `wablas-webhook` dari folder `supabase/functions/wablas-webhook` ke project Supabase yang digunakan.
 
-Jangan memberikan hak admin melalui user_metadata. Daftar admin disimpan di tabel private-by-policy `admin_users`.
+## Data yang dipertahankan
 
-Bucket Storage `undangan-assets` dibuat oleh migration dan disetel public agar Wablas dapat mengambil file undangan/tiket dari URL.
-
-## Edge Function webhook
-
-Deploy function `wablas-webhook` ke project Supabase. Function menerima POST dari Wablas dan menggunakan format payload inbound yang didokumentasikan Wablas.
-
-Set secrets di Supabase Edge Functions:
-
-- `WABLAS_TOKEN`: token device Wablas.
-- `WABLAS_SECRET_KEY`: secret key device Wablas.
-- `WABLAS_WEBHOOK_SECRET`: nilai acak panjang untuk mengamankan URL webhook.
-
-Webhook URL untuk Wablas:
-
-```
-https://rexjmedyqrdlyeepuiax.supabase.co/functions/v1/wablas-webhook?key=ISI_DENGAN_WABLAS_WEBHOOK_SECRET
-```
-
-Pada pengaturan device Wablas:
-1. Aktifkan **Get Incoming Message**.
-2. Aktifkan **Get Auto Reply From Webhook** jika menggunakan mode auto-reply Wablas.
-3. Isi **Webhook URL for Inbound Message** dengan URL di atas.
-
-Saat tamu mengirim `DAFTAR`, bot meminta Nama, No WA, Alamat, dan Pengundang. Data yang lengkap disimpan ke `registrations`, dengan kuota tiket tetap 2 orang.
+Migration database, data acara, data registrasi/peserta, akun admin, dan file Storage tidak dihapus oleh perubahan ini.
 
 ## Dashboard Cloudflare Pages
 
-Buat Pages project dari repository ini:
 - Root directory: `dashboard`
 - Build command: `npm run build`
 - Build output directory: `dist`
 
-Environment variables Cloudflare Pages:
-- `VITE_SUPABASE_URL`: URL project Supabase.
-- `VITE_SUPABASE_ANON_KEY`: Supabase publishable key (atau anon key legacy).
+Environment variables:
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
 
-Jangan pernah memasukkan service role key atau Wablas credentials ke Cloudflare Pages.
+Jangan pernah memasukkan service role key, token Wablas, atau webhook secret ke frontend atau repository.
 
-## Status implementasi awal
+## Keamanan
 
-- Skema database dan RLS awal: tersedia.
-- Webhook inbound: tersedia untuk alur teks DAFTAR dan formulir.
-- Generator tiket JPEG otomatis: dirender setelah registrasi, disimpan ke Supabase Storage, lalu dikirim melalui endpoint Wablas V2.
-- Dashboard: login admin, statistik dasar, daftar registrasi, pencarian, export CSV.
-- Pengiriman undangan massal dan pengelolaan kampanye dari dashboard masih perlu dilengkapi sebelum operasional.
-- Webhook dan dashboard belum dapat diuji end-to-end sampai akses project Supabase dan kredensial Wablas dikonfigurasi.
-
-## Batas keamanan
-
-- Jangan commit token Wablas, service role key, password, atau webhook secret ke GitHub.
-- Webhook memerlukan secret query parameter yang disimpan sebagai Supabase Function Secret.
-- Admin frontend hanya menggunakan publishable/anon key dan akses dibatasi RLS.
+Webhook memerlukan secret query parameter yang disimpan sebagai Supabase Function Secret. Dashboard menggunakan publishable/anon key dan akses data dibatasi oleh RLS.
