@@ -523,7 +523,7 @@ async function renderPublicInvitation() {
   const pathParts = location.pathname.split("/").filter(Boolean);
   const routeKey = decodeURIComponent(pathParts[1] || "");
   const isLegacyId = /^[0-9a-f-]{36}$/i.test(routeKey);
-  const isDateTimeSlug = /^\\d{10}$/.test(routeKey);
+  const isDateTimeSlug = /^\d{10}$/.test(routeKey);
   if (!isLegacyId && !isDateTimeSlug) {
     app.innerHTML = '<main class="public-event-loading"><section class="public-event-card"><h1>Link acara tidak valid</h1><p>Gunakan format DDMMYYJJMM, misalnya 0311261400.</p></section></main>';
     return;
@@ -591,17 +591,8 @@ async function renderPublicInvitation() {
     : '<div class="public-event-no-image">Gambar undangan belum tersedia.</div>';
   app.innerHTML =
     '<main class="public-event-page"><article class="public-event-card">' +
-      '<div class="public-event-brand">UNDANGAN DIGITAL</div><div class="public-event-rule"></div>' +
-      '<p class="public-event-kicker">DENGAN HORMAT, KAMI MENGUNDANG ANDA</p>' +
-      '<h1>' + safe(title) + '</h1>' +
-      '<section class="public-event-details">' +
-        '<div class="public-event-detail"><span>TANGGAL</span><strong>' + safe(dateText) + '</strong></div>' +
-        '<div class="public-event-detail"><span>PUKUL</span><strong>' + safe(timeText) + '</strong></div>' +
-        '<div class="public-event-detail"><span>TEMPAT</span><strong>' + safe(event.venue) + '</strong></div>' +
-      '</section>' + imageSection +
-      '<p class="public-event-note">' + (ended ? "Acara ini telah berlangsung." : "Merupakan suatu kehormatan bagi kami atas kehadiran Anda.") + '</p>' +
-      '<p class="public-event-footer">Undangan ini dibagikan secara digital melalui Undangan WA</p>' +
-    '</article></main>';
+      imageSection +
+    '</article></main>'
 }
 
 async function boot() {
