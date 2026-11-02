@@ -36,7 +36,7 @@ const slugForDate = (value: string) => {
     hour:"2-digit", minute:"2-digit", hourCycle:"h23",
   }).formatToParts(new Date(value));
   const get = (key: string) => parts.find((p) => p.type === key)?.value || "";
-  return get("day") + get("month") + get("year") + get("hour") + get("minute");
+  return (get("day") + get("month") + get("year") + get("hour") + get("minute")).replace(/[^0-9]/g, "");
 };
 const formatDate = (value: string) => new Intl.DateTimeFormat("id-ID", {
   day:"2-digit", month:"long", year:"numeric", timeZone:"Asia/Jakarta",
@@ -164,7 +164,7 @@ async function sendWablas(phone: string, message: string, refId: string) {
   const response = await fetch("https://smg.wablas.com/api/v2/send-message", {
     method:"POST",
     headers:{ Authorization:token + "." + secretKey, "Content-Type":"application/json", Accept:"application/json" },
-    body:JSON.stringify({ data:[{ phone, message, ref_id:refId }] }),
+    body:JSON.stringify({ data:[{ phone, message:message.replace(/[\u200B-\u200D\uFEFF]/g, ""), ref_id:refId }] }),
   });
   const result = await response.json();
   console.log("Wablas send response", { refId, httpStatus:response.status, accepted:result.status === true, providerMessage:result.message || null });
