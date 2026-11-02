@@ -507,8 +507,9 @@ async function renderPublicInvitation() {
     if (parsed.protocol === "https:") imageUrl = parsed.href;
   } catch {}
   const safe = value => esc(value || "-");
+  const previewUrl = imageUrl.replace(/([?&])export=download(?=&|$)/, "$1export=view");
   const imageSection = imageUrl
-    ? '<div class="public-event-image-wrap"><img class="public-event-image" src="' + esc(imageUrl) + '" alt="Gambar undangan ' + safe(title) + '" loading="eager"></div>' +
+    ? '<div class="public-event-image-wrap"><img class="public-event-image" src="' + esc(previewUrl) + '" alt="Gambar undangan ' + safe(title) + '" loading="eager"></div>' +
       '<a class="public-download-button" href="' + esc(imageUrl) + '" target="_blank" rel="noopener noreferrer" download>↓ &nbsp; Download Undangan</a>'
     : '<div class="public-event-no-image">Gambar undangan belum tersedia.</div>';
   app.innerHTML =
