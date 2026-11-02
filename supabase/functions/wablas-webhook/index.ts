@@ -167,6 +167,7 @@ async function sendWablas(phone: string, message: string, refId: string) {
     body:JSON.stringify({ data:[{ phone, message, ref_id:refId }] }),
   });
   const result = await response.json();
+  console.log("Wablas send response", { refId, httpStatus:response.status, accepted:result.status === true, providerMessage:result.message || null });
   if (!response.ok || result.status !== true) {
     throw new Error("Wablas gagal menerima pesan: " + String(result.message || response.status));
   }
@@ -254,16 +255,23 @@ Deno.serve(async (req) => {
       return json({ accepted:true, command:"list_events", count:events?.length || 0 });
     }
 
-    if (state === "awaiting_download_choice" && (command === "y" || command === "n")) {
+    if ((state === "awaiting_download_choice" || (state === "idle" && command === "y")) && (command === "y" || command === "n")) {
       const pending = Array.isArray(conversation?.pending_campaign_ids) ? conversation.pending_campaign_ids : [];
+      let selectedCampaignId = conversation?.campaign_id || null;
       if (command === "y") {
-        if (!conversation?.campaign_id) {
+        // Recover safely when state was reset: only use an event if exactly one is upcoming and active.
+        if (!selectedCampaignId && state === "idle") {
+          const { data:upcomingEvents, error:upcomingError } = await admin.from("invite_campaigns")
+            .select("id").eq("is_active", true).gte("event_date", now)
+            .order("event_date", { ascending:true }).limit(2);
+          if (!upcomingError && upcomingEvents?.length === 1) selectedCampaignId = upcomingEvents[0].id;
+        }
+        if (!selectedCampaignId) {
           await sendWablas(phone, "Maaf, data acara yang dipilih tidak ditemukan. Silakan kirim Menu lalu pilih 1 kembali.", "event-download-missing-" + crypto.randomUUID());
-          await showNextEventChoice(admin, phone, pending);
           return json({ accepted:true, command:"download_link_missing_campaign" });
         }
         const { data:event, error:eventError } = await admin.from("invite_campaigns")
-          .select("id,event_date,is_active").eq("id", conversation.campaign_id).maybeSingle();
+          .select("id,event_date,is_active").eq("id", selectedCampaignId).maybeSingle();
         if (eventError || !event || !event.event_date || !event.is_active) {
           await sendWablas(phone, "Maaf, data acara tidak dapat ditemukan atau sudah tidak aktif. Silakan kirim Menu lalu pilih 1 kembali.", "event-download-unavailable-" + crypto.randomUUID());
           await showNextEventChoice(admin, phone, pending);
@@ -282,7 +290,7 @@ Deno.serve(async (req) => {
         // without restarting Menu > 1.
         await admin.from("bot_conversations").upsert({
           phone, state:"awaiting_download_choice",
-          campaign_id:conversation.campaign_id,
+          campaign_id:selectedCampaignId,
           pending_campaign_ids:[],
           last_message_at:new Date().toISOString(),
           updated_at:new Date().toISOString(),
