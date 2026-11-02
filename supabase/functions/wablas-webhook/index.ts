@@ -275,7 +275,21 @@ Deno.serve(async (req) => {
       } else {
         await sendWablas(phone, "Terima Kasih\n\nSelamat Melanjutkan Aktifitas Anda", "event-skip-" + crypto.randomUUID());
       }
-      await showNextEventChoice(admin, phone, pending);
+      if (pending.length) {
+        await showNextEventChoice(admin, phone, pending);
+      } else if (command === "y") {
+        // Keep the selected event active so the sender can type Y again
+        // without restarting Menu > 1.
+        await admin.from("bot_conversations").upsert({
+          phone, state:"awaiting_download_choice",
+          campaign_id:conversation.campaign_id,
+          pending_campaign_ids:[],
+          last_message_at:new Date().toISOString(),
+          updated_at:new Date().toISOString(),
+        });
+      } else {
+        await showNextEventChoice(admin, phone, []);
+      }
       return json({ accepted:true, command:command === "y" ? "download_link" : "skip_event" });
     }
 
