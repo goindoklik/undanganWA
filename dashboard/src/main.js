@@ -520,9 +520,9 @@ async function renderPublicInvitation() {
     app.innerHTML = '<main class="login-wrap"><section class="login-card"><h1>Undangan belum dapat dibuka</h1><p>Konfigurasi layanan belum tersedia.</p></section></main>';
     return;
   }
-  const pathParts = location.pathname.split("/").filter(Boolean);
-  // WhatsApp/Wablas can insert zero-width characters into long links.\n  // Remove them before validating the event slug so the original DDMMYYJJMM route still opens.\n  const routeKey = decodeURIComponent(pathParts[1] || "").replace(/[\\u200B-\\u200D\\uFEFF]/g, "");
-  const isLegacyId = /^[0-9a-f-]{36}$/i.test(routeKey);
+  // WhatsApp/Wablas can insert zero-width characters into long links.
+  // Remove them before validating the event slug.
+  const routeKey = decodeURIComponent(pathParts[1] || "").replace(/[\u200B-\u200D\uFEFF]/g, "");
   const isDateTimeSlug = /^\d{10}$/.test(routeKey);
   if (!isLegacyId && !isDateTimeSlug) {
     app.innerHTML = '<main class="public-event-loading"><section class="public-event-card"><h1>Link acara tidak valid</h1><p>Gunakan format DDMMYYJJMM, misalnya 0311261400.</p></section></main>';
