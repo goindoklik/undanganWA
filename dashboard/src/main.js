@@ -271,7 +271,17 @@ async function showEventInvitation(eventId) {
         alert("Undangan berhasil disimpan ke Google Drive/PilotX/Undangan. Tautan acara sudah diperbarui.");
       } catch (error) {
         console.error("Google Drive upload failed:", error);
-        alert(error.message || "Gagal menyimpan undangan ke Google Drive.");
+        let message = error?.message || "Gagal menyimpan undangan ke Google Drive.";
+        // Supabase FunctionsHttpError menyimpan isi respons server di error.context.
+        try {
+          if (error?.context && typeof error.context.clone === "function") {
+            const responseBody = await error.context.clone().json();
+            if (responseBody?.error) message = responseBody.error;
+          }
+        } catch (readError) {
+          console.warn("Tidak dapat membaca detail respons upload:", readError);
+        }
+        alert(message);
       } finally {
         button.disabled = false;
         button.textContent = "Simpan ke Google Drive";
