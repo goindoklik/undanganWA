@@ -262,6 +262,26 @@ Deno.serve(async (req) => {
       return json({ accepted:true, command:"create_event_prompt" });
     }
 
+    if (command === "perbaiki gambar") {
+      const { data:event, error:eventError } = await admin.from("invite_campaigns")
+        .select("id,name,event_title,event_date,venue,is_active")
+        .eq("is_active", true).order("created_at", { ascending:false }).limit(1).maybeSingle();
+      if (eventError || !event) {
+        await sendWablas(phone, "Tidak ada acara aktif yang dapat diperbarui gambarnya.", "event-image-refresh-missing-" + crypto.randomUUID());
+        return json({ accepted:true, command:"refresh_image_missing" });
+      }
+      const svg = await createInvitationSvg(event as EventRow);
+      const png = await renderInvitationPng(svg);
+      const driveUrl = await uploadInvitationToDrive(event as EventRow, png);
+      const { error:updateError } = await admin.from("invite_campaigns")
+        .update({ invitation_image_url:driveUrl }).eq("id", event.id);
+      if (updateError) throw new Error("Gambar baru berhasil dibuat tetapi tautannya gagal diperbarui.");
+      await sendWablas(phone, "Gambar undangan berhasil diperbarui.\n\nNama Acara: " + (event.event_title || event.name) +
+        "\nTanggal: " + formatDate(event.event_date) + "\nPukul: " + formatTime(event.event_date) +
+        "\nTempat: " + (event.venue || "-"), "event-image-refresh-" + event.id + "-" + crypto.randomUUID());
+      return json({ accepted:true, command:"refresh_image", event_id:event.id });
+    }
+
     if (command === "1") {
       const { data:events, error } = await admin.from("invite_campaigns")
         .select("id,name,event_title,event_date,venue,is_active")
