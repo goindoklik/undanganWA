@@ -1,0 +1,82 @@
+/* Halaman publik acara: hanya gambar undangan dan tombol download. Berlaku untuk semua acara. */
+html, body, #app { min-height: 100%; }
+body { margin: 0; background: #fff; }
+.public-event-page {
+  min-height: 100vh;
+  padding: 0;
+  background: #fff;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+.public-event-card {
+  width: 100%;
+  max-width: 1000px;
+  padding: 12px;
+  margin: 0 auto;
+  background: #fff;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  text-align: center;
+}
+.public-event-brand,
+.public-event-rule,
+.public-event-kicker,
+.public-event-card h1,
+.public-event-details,
+.public-event-note,
+.public-event-footer { display: none !important; }
+.public-event-image-wrap {
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+.public-event-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: none;
+  object-fit: contain;
+  border-radius: 0;
+}
+.public-download-button {
+  width: min(100%, 360px);
+  min-height: 50px;
+  margin: 14px auto 12px;
+  border-radius: 9px;
+  background: #172744;
+  color: #fff;
+  text-decoration: none;
+  font: 700 15px Arial, sans-serif;
+}
+.public-event-no-image {
+  margin: 12px;
+  padding: 18px;
+  background: #f5f5f5;
+  border: 0;
+  color: #444;
+}
+.public-event-loading {
+  min-height: 100vh;
+  padding: 16px;
+  background: #fff;
+  color: #222;
+}
+.public-event-loading .public-event-card {
+  width: 100%;
+  max-width: 1000px;
+  padding: 16px;
+  border: 0;
+  box-shadow: none;
+}
+.public-event-loading .public-event-brand,
+.public-event-loading .public-event-rule,
+.public-event-loading .public-event-kicker { display: none !important; }
+@media (max-width: 600px) {
+  .public-event-card { padding: 8px; }
+  .public-event-image { max-height: none; }
+  .public-download-button { width: 100%; }
+}
