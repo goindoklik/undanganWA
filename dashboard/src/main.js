@@ -76,6 +76,16 @@ async function loadEvents() {
   return eventRecords;
 }
 
+function eventSlug(value) {
+  if (!value) return "";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Jakarta", day: "2-digit", month: "2-digit",
+    year: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+  }).formatToParts(new Date(value));
+  const get = type => parts.find(part => part.type === type)?.value || "";
+  return get("day") + get("month") + get("year") + get("hour") + get("minute");
+}
+
 function eventStatus(event) {
   if (!event.event_date) return "Belum dijadwalkan";
   return new Date(event.event_date).getTime() < Date.now() ? "Sudah berlangsung" : "Akan berlangsung";
@@ -89,7 +99,7 @@ function eventsView(events) {
     ${events.map(ev => {
       const d = ev.event_date ? new Date(ev.event_date) : null;
       const count = registrations.filter(r => r.campaign_id === ev.id).length;
-      return `<tr><td><b>${esc(ev.event_title || ev.name)}</b></td><td>${d ? d.toLocaleDateString("id-ID",{dateStyle:"long",timeZone:"Asia/Jakarta"}) : "-"}</td><td>${d ? d.toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Jakarta"})+" WIB" : "-"}</td><td>${esc(ev.venue || "-")}</td><td>${count} orang</td><td><span class="status">${eventStatus(ev)}</span></td><td><a class="outline compact event-page-link" href="/acara/${ev.id}" target="_blank" rel="noopener noreferrer">Halaman Acara</a> <button class="outline compact invitation-event" data-id="${ev.id}">Undangan</button> <button class="outline compact edit-event" data-id="${ev.id}">Edit</button> <button class="outline compact delete-event" data-id="${ev.id}">Hapus</button></td></tr>`;
+      return `<tr><td><b>${esc(ev.event_title || ev.name)}</b></td><td>${d ? d.toLocaleDateString("id-ID",{dateStyle:"long",timeZone:"Asia/Jakarta"}) : "-"}</td><td>${d ? d.toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Jakarta"})+" WIB" : "-"}</td><td>${esc(ev.venue || "-")}</td><td>${count} orang</td><td><span class="status">${eventStatus(ev)}</span></td><td><a class="outline compact event-page-link" href="/undangan/${eventSlug(ev.event_date)}" target="_blank" rel="noopener noreferrer">Halaman Acara</a> <button class="outline compact invitation-event" data-id="${ev.id}">Undangan</button> <button class="outline compact edit-event" data-id="${ev.id}">Edit</button> <button class="outline compact delete-event" data-id="${ev.id}">Hapus</button></td></tr>`;
     }).join("")}
     </tbody></table></div>` : '<div class="empty">Belum ada acara. Klik Tambah Acara untuk membuat acara pertama.</div>'}
   </section>`;
@@ -511,15 +521,36 @@ async function renderPublicInvitation() {
     return;
   }
   const pathParts = location.pathname.split("/").filter(Boolean);
-  const id = decodeURIComponent(pathParts[1] || "");
-  if (!/^[0-9a-f-]{36}$/i.test(id)) {
-    app.innerHTML = '<main class="public-event-loading"><section class="public-event-card"><h1>Link acara tidak valid</h1><p>Periksa kembali link yang Anda terima.</p></section></main>';
+  const routeKey = decodeURIComponent(pathParts[1] || "");
+  const isLegacyId = /^[0-9a-f-]{36}$/i.test(routeKey);
+  const isDateTimeSlug = /^\\d{10}$/.test(routeKey);
+  if (!isLegacyId && !isDateTimeSlug) {
+    app.innerHTML = '<main class="public-event-loading"><section class="public-event-card"><h1>Link acara tidak valid</h1><p>Gunakan format DDMMYYJJMM, misalnya 0311261400.</p></section></main>';
     return;
   }
   app.innerHTML = '<main class="public-event-loading"><section class="public-event-card"><p class="eyebrow">UNDANGAN DIGITAL</p><h1>Memuat informasi acara...</h1></section></main>';
-  const { data: event, error } = await supabase.from("invite_campaigns")
+  let eventQuery = supabase.from("invite_campaigns")
     .select("id,event_title,name,event_date,venue,invitation_image_url,is_active")
-    .eq("id", id).eq("is_active", true).maybeSingle();
+    .eq("is_active", true);
+  if (isLegacyId) {
+    eventQuery = eventQuery.eq("id", routeKey);
+  } else {
+    const day = Number(routeKey.slice(0, 2));
+    const month = Number(routeKey.slice(2, 4));
+    const year = 2000 + Number(routeKey.slice(4, 6));
+    const hour = Number(routeKey.slice(6, 8));
+    const minute = Number(routeKey.slice(8, 10));
+    const localDate = new Date(Date.UTC(year, month - 1, day, hour - 7, minute));
+    if (localDate.getUTCFullYear() !== year || localDate.getUTCMonth() !== month - 1 ||
+        localDate.getUTCDate() !== day || hour > 23 || minute > 59) {
+      app.innerHTML = '<main class="public-event-loading"><section class="public-event-card"><h1>Format link tidak valid</h1></section></main>';
+      return;
+    }
+    const start = new Date(Date.UTC(year, month - 1, day, hour - 7, minute)).toISOString();
+    const end = new Date(Date.UTC(year, month - 1, day, hour - 7, minute + 1)).toISOString();
+    eventQuery = eventQuery.gte("event_date", start).lt("event_date", end);
+  }
+  const { data: event, error } = await eventQuery.maybeSingle();
   if (error || !event) {
     app.innerHTML = '<main class="public-event-loading"><section class="public-event-card"><h1>Acara tidak ditemukan</h1><p>Link mungkin tidak aktif atau acara sudah tidak tersedia.</p></section></main>';
     return;
