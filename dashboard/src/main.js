@@ -523,6 +523,7 @@ async function renderPublicInvitation() {
   // WhatsApp/Wablas can insert zero-width characters into long links.
   // Remove them before validating the event slug.
   // Remove invisible Unicode characters sometimes inserted by WhatsApp into links.
+  const pathParts = location.pathname.split("/").filter(Boolean);
   let routeKey = pathParts[1] || "";
   try { routeKey = decodeURIComponent(routeKey); } catch { /* sanitize raw segment below */ }
   routeKey = routeKey.replace(/[\u200B-\u200F\u2060\uFEFF]/g, "");
