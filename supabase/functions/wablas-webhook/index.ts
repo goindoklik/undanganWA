@@ -270,7 +270,7 @@ Deno.serve(async (req) => {
           return json({ accepted:true, command:"download_link_unavailable" });
         }
         const url = "https://undanganwa.pages.dev/undangan/" + slugForDate(event.event_date);
-        const downloadMessage = "Silahkan Download Undangan melalui tautan berikut:\n\n" + url;
+        const downloadMessage = "Silahkan unduh undangan di sini: " + url;
         await sendWablas(phone, downloadMessage, "event-download-" + event.id + "-" + crypto.randomUUID());
       } else {
         await sendWablas(phone, "Terima Kasih\n\nSelamat Melanjutkan Aktifitas Anda", "event-skip-" + crypto.randomUUID());
