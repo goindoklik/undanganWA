@@ -167,7 +167,15 @@ async function sendWablas(phone: string, message: string, refId: string) {
     body:JSON.stringify({ data:[{ phone, message:message.replace(/[\u200B-\u200D\uFEFF]/g, ""), ref_id:refId }] }),
   });
   const result = await response.json();
-  console.log("Wablas send response", { refId, httpStatus:response.status, accepted:result.status === true, providerMessage:result.message || null });
+  console.log("Wablas send response", {
+    refId,
+    httpStatus:response.status,
+    accepted:result.status === true,
+    providerMessage:result.message || null,
+    outgoingLength:message.replace(/[\\u200B-\\u200D\\uFEFF]/g, "").length,
+    outgoingPreview:message.replace(/[\\u200B-\\u200D\\uFEFF]/g, "").slice(0, 180),
+    queuedMessages:Array.isArray(result.data?.messages) ? result.data.messages.map((item: any) => ({ id:item.id, status:item.status, message:item.message })) : null,
+  });
   if (!response.ok || result.status !== true) {
     throw new Error("Wablas gagal menerima pesan: " + String(result.message || response.status));
   }
