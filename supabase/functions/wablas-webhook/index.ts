@@ -82,12 +82,15 @@ async function createInvitationSvg(event: EventRow) {
   if (!response.ok) throw new Error("Template gambar undangan tidak dapat diambil.");
   const template = bytesToBase64(new Uint8Array(await response.arrayBuffer()));
   const venue = (event.venue || "").replace(/\\s+/g, " ").trim();
-  const venueWords = venue.split(" ");
+  // Keep the complete venue inside its fixed label area. Wrap by measured
+  // character budget, then constrain each rendered line so long names cannot
+  // spill outside the box on future invitations.
+  const venueWords = venue.split(/\\s+/).filter(Boolean);
   const venueLines: string[] = [];
   let venueLine = "";
   for (const word of venueWords) {
     const candidate = venueLine ? venueLine + " " + word : word;
-    if (candidate.length > 13 && venueLine) {
+    if (candidate.length > 18 && venueLine) {
       venueLines.push(venueLine);
       venueLine = word;
     } else {
@@ -97,7 +100,7 @@ async function createInvitationSvg(event: EventRow) {
   if (venueLine) venueLines.push(venueLine);
   const shownVenueLines = venueLines.slice(0, 2);
   const venueSvg = shownVenueLines.map((line, index) =>
-    '<text x="741" y="' + (shownVenueLines.length === 1 ? 750 : 739 + index * 24) + '" font-size="17" text-anchor="start">' + escapeXml(line) + '</text>'
+    '<text x="741" y="' + (shownVenueLines.length === 1 ? 750 : 739 + index * 24) + '" font-size="14" textLength="145" lengthAdjust="spacingAndGlyphs" text-anchor="start">' + escapeXml(line) + '</text>'
   ).join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1024" height="1536" viewBox="0 0 1024 1536">
     <image x="0" y="0" width="1024" height="1536" xlink:href="data:image/png;base64,${template}"/>
