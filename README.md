@@ -5,27 +5,57 @@ Dashboard pengelolaan acara dan peserta. Proyek menggunakan GitHub, Cloudflare P
 ## Arsitektur
 
 - **Cloudflare Pages**: dashboard admin frontend.
-- **Supabase**: database, Storage, Auth, dan Edge Functions.
+- **Supabase**: database, Storage, dan Edge Functions.
 - **Wablas**: gateway WhatsApp.
+- **Google Drive**: penyimpanan otomatis gambar undangan di folder `PilotX/Undangan`.
 - **GitHub**: source code.
 
-## Struktur
+## Perintah bot WhatsApp
 
-- `dashboard/`: dashboard admin.
-- `supabase/functions/wablas-webhook/`: endpoint webhook Wablas.
-- `supabase/migrations/`: skema database.
+Hanya nomor yang aktif di tabel `authorized_senders` yang dapat menggunakan perintah.
 
-## Status bot saat ini
+Kirim `Menu` untuk melihat:
+1. Data Acara yang akan berlangsung
+2. Buat Acara
 
-**Seluruh perintah dan alur bot WhatsApp lama telah dinonaktifkan di source code.** Webhook hanya memvalidasi secret dan menerima payload; webhook tidak memproses perintah, tidak mengirim balasan, dan tidak mengubah data acara maupun peserta.
+### Buat acara
 
-Bot akan dibangun ulang dari nol setelah rancangan perintah baru disepakati.
+Kirim `2`, lalu kirim data dengan format:
 
-Untuk mengaktifkan kondisi nonaktif ini di server, deploy ulang Edge Function `wablas-webhook` dari folder `supabase/functions/wablas-webhook` ke project Supabase yang digunakan.
+`Nama Acara#Waktu Acara#Pukul#Tempat`
 
-## Data yang dipertahankan
+Contoh:
 
-Migration database, data acara, data registrasi/peserta, akun admin, dan file Storage tidak dihapus oleh perubahan ini.
+`Acara Offline PilotX#05 November 2026#15:00#RM Sederhana Majalengka`
+
+Webhook akan:
+- Membuat data di `invite_campaigns`.
+- Mengambil template `Gambar/Undangan.png` dan mengisi tanggal, pukul, serta tempat acara di sisi server.
+- Mengunggah gambar hasil ke Google Drive folder `PilotX/Undangan`.
+- Menyimpan URL Drive ke `invite_campaigns.invitation_image_url`.
+- Mengirim konfirmasi dan URL halaman acara melalui WhatsApp.
+
+Gambar undangan tidak dikirim melalui WhatsApp dan pengguna tidak perlu membuka dashboard untuk menekan tombol simpan.
+
+### Data acara mendatang
+
+Kirim `1` untuk melihat acara aktif yang akan berlangsung. Bot menampilkan detail satu per satu dan meminta jawaban `Y` atau `N` untuk link halaman acara.
+
+## Konfigurasi Supabase Edge Function
+
+Function `wablas-webhook` menggunakan secrets:
+- `WABLAS_WEBHOOK_SECRET`
+- `WABLAS_TOKEN`
+- `WABLAS_SECRET_KEY`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REFRESH_TOKEN`
+
+URL webhook Wablas:
+
+`https://rexjmedyqrdlyeepuiax.supabase.co/functions/v1/wablas-webhook?key=WEBHOOK_SECRET`
+
+Ganti `WEBHOOK_SECRET` dengan nilai secret yang sama di Supabase. Jangan menaruh token, secret, atau service-role key di dashboard frontend atau repository.
 
 ## Dashboard Cloudflare Pages
 
@@ -37,8 +67,6 @@ Environment variables:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
-Jangan pernah memasukkan service role key, token Wablas, atau webhook secret ke frontend atau repository.
-
 ## Keamanan
 
-Webhook memerlukan secret query parameter yang disimpan sebagai Supabase Function Secret. Dashboard menggunakan publishable/anon key dan akses data dibatasi oleh RLS.
+Webhook memverifikasi secret sebelum memproses payload, mengabaikan pesan grup dan pesan dari nomor bot sendiri, memeriksa izin pengirim dari database, serta mencatat ID pesan Wablas untuk mencegah pemrosesan duplikat.
