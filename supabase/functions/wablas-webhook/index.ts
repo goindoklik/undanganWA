@@ -49,7 +49,7 @@ const formatWeekday = (value: string) => new Intl.DateTimeFormat("id-ID", {
 }).format(new Date(value));
 
 function parseEventInput(input: string) {
-  const parts = input.split("#").map((part) => part.trim());
+  const parts = input.split("#").map((part) => part.trim().replace(/^\\*\\*/, "").replace(/\\*\\*$/, "").trim());
   if (parts.length !== 4 || parts.some((part) => !part)) return null;
   const [title, dateText, timeText, venue] = parts;
   const dateMatch = dateText.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/i);
