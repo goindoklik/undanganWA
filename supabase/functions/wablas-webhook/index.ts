@@ -269,7 +269,7 @@ Deno.serve(async (req) => {
           await showNextEventChoice(admin, phone, pending);
           return json({ accepted:true, command:"download_link_unavailable" });
         }
-        const url = "https://undanganwa.pages.dev/acara/" + slugForDate(event.event_date);
+        const url = "https://undanganwa.pages.dev/undangan/" + slugForDate(event.event_date);
         const downloadMessage = "Silahkan Download Undangan melalui tautan berikut:\n\n" + url;
         await sendWablas(phone, downloadMessage, "event-download-" + event.id + "-" + crypto.randomUUID());
       } else {
@@ -297,12 +297,12 @@ Deno.serve(async (req) => {
         const { error:updateError } = await admin.from("invite_campaigns").update({ invitation_image_url:driveUrl }).eq("id", event.id);
         if (updateError) throw new Error("Gambar tersimpan di Drive tetapi tautannya gagal disimpan ke acara.");
       } catch (driveError) {
-        const eventUrl = "https://undanganwa.pages.dev/acara/" + slugForDate(event.event_date);
+        const eventUrl = "https://undanganwa.pages.dev/undangan/" + slugForDate(event.event_date);
         await sendWablas(phone, "Data acara sudah dibuat, tetapi gambar undangan gagal disimpan ke Google Drive.\n" + String((driveError as Error)?.message || "Silakan periksa koneksi Google Drive.") + "\n\nLink Halaman Acara:\n" + eventUrl, "event-drive-error-" + event.id);
         await admin.from("bot_conversations").upsert({ phone, state:"idle", campaign_id:null, pending_campaign_ids:[], last_message_at:new Date().toISOString(), updated_at:new Date().toISOString() });
         return json({ accepted:true, event_id:event.id, drive_saved:false });
       }
-      const eventUrl = "https://undanganwa.pages.dev/acara/" + slugForDate(event.event_date);
+      const eventUrl = "https://undanganwa.pages.dev/undangan/" + slugForDate(event.event_date);
       const confirmation = "Data Sudah Tersimpan\n\nNama Acara: " + event.event_title +
         "\nWaktu Acara: " + formatDate(event.event_date) +
         "\nPukul: " + formatTime(event.event_date) +
