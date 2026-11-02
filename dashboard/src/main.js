@@ -521,7 +521,7 @@ async function renderPublicInvitation() {
     return;
   }
   const pathParts = location.pathname.split("/").filter(Boolean);
-  const routeKey = decodeURIComponent(pathParts[1] || "");
+  // WhatsApp/Wablas can insert zero-width characters into long links.\n  // Remove them before validating the event slug so the original DDMMYYJJMM route still opens.\n  const routeKey = decodeURIComponent(pathParts[1] || "").replace(/[\\u200B-\\u200D\\uFEFF]/g, "");
   const isLegacyId = /^[0-9a-f-]{36}$/i.test(routeKey);
   const isDateTimeSlug = /^\d{10}$/.test(routeKey);
   if (!isLegacyId && !isDateTimeSlug) {
