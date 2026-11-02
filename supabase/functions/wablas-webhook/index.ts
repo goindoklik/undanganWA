@@ -81,26 +81,26 @@ async function createInvitationSvg(event: EventRow) {
   const response = await fetch(templateUrl);
   if (!response.ok) throw new Error("Template gambar undangan tidak dapat diambil.");
   const template = bytesToBase64(new Uint8Array(await response.arrayBuffer()));
-  const venue = (event.venue || "").replace(/\\s+/g, " ").trim();
-  // Keep the complete venue inside its fixed label area. Wrap by measured
-  // character budget, then constrain each rendered line so long names cannot
-  // spill outside the box on future invitations.
-  const venueWords = venue.split(/\\s+/).filter(Boolean);
+  const venue = (event.venue || "").replace(/\s+/g, " ").trim();
+  // Split the full venue into two balanced lines and constrain both to the
+  // available label width so long venue names never escape the box.
+  const venueWords = venue.split(/\s+/).filter(Boolean);
   const venueLines: string[] = [];
-  let venueLine = "";
-  for (const word of venueWords) {
-    const candidate = venueLine ? venueLine + " " + word : word;
-    if (candidate.length > 18 && venueLine) {
-      venueLines.push(venueLine);
-      venueLine = word;
-    } else {
-      venueLine = candidate;
+  if (venueWords.length) {
+    const totalLength = venueWords.join(" ").length;
+    const targetLength = Math.ceil(totalLength / 2);
+    let firstLine = "";
+    while (venueWords.length) {
+      const candidate = firstLine ? firstLine + " " + venueWords[0] : venueWords[0];
+      if (firstLine && candidate.length > targetLength) break;
+      firstLine = candidate;
+      venueWords.shift();
     }
+    venueLines.push(firstLine);
+    if (venueWords.length) venueLines.push(venueWords.join(" "));
   }
-  if (venueLine) venueLines.push(venueLine);
-  const shownVenueLines = venueLines.slice(0, 2);
-  const venueSvg = shownVenueLines.map((line, index) =>
-    '<text x="741" y="' + (shownVenueLines.length === 1 ? 750 : 739 + index * 24) + '" font-size="14" textLength="145" lengthAdjust="spacingAndGlyphs" text-anchor="start">' + escapeXml(line) + '</text>'
+  const venueSvg = venueLines.map((line, index) =>
+    '<text x="741" y="' + (venueLines.length === 1 ? 750 : 739 + index * 24) + '" font-size="14" textLength="145" lengthAdjust="spacingAndGlyphs" text-anchor="start">' + escapeXml(line) + '</text>'
   ).join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1024" height="1536" viewBox="0 0 1024 1536">
     <image x="0" y="0" width="1024" height="1536" xlink:href="data:image/png;base64,${template}"/>
