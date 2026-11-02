@@ -509,7 +509,7 @@ async function renderPublicInvitation() {
     if (parsed.protocol === "https:") {
       imageUrl = parsed.href;
       const driveId = parsed.hostname === "drive.google.com"
-        ? (parsed.pathname.match(/\\/file\\/d\\/([^/]+)/)?.[1] || parsed.searchParams.get("id"))
+        ? (parsed.pathname.split("/").filter(Boolean)[0] === "file" && parsed.pathname.split("/").filter(Boolean)[1] === "d" ? parsed.pathname.split("/").filter(Boolean)[2] : parsed.searchParams.get("id"))
         : null;
       if (driveId) {
         previewUrl = "https://drive.google.com/thumbnail?id=" + encodeURIComponent(driveId) + "&sz=w1600";
