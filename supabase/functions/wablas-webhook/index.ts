@@ -98,7 +98,22 @@ async function createInvitationSvg(event: EventRow) {
   </svg>`;
 }
 
-async function uploadInvitationToDrive(event: EventRow, svg: string) {
+let resvgInit: Promise<void> | null = null;
+async function renderInvitationPng(svg: string): Promise<Uint8Array> {
+  const { initWasm, Resvg } = await import("npm:@resvg/resvg-wasm@2.6.2");
+  if (!resvgInit) {
+    resvgInit = (async () => {
+      const wasmResponse = await fetch("https://unpkg.com/@resvg/resvg-wasm@2.6.2/index_bg.wasm");
+      if (!wasmResponse.ok) throw new Error("Mesin pembuat PNG undangan gagal dimuat.");
+      await initWasm(wasmResponse);
+    })();
+  }
+  await resvgInit;
+  const renderer = new Resvg(svg, { fitTo:{ mode:"original" }, font:{ defaultFontFamily:"Arial" } });
+  return renderer.render().asPng();
+}
+
+async function uploadInvitationToDrive(event: EventRow, png: Uint8Array) {
   const clientId = Deno.env.get("GOOGLE_CLIENT_ID");
   const clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
   const refreshToken = Deno.env.get("GOOGLE_REFRESH_TOKEN");
@@ -112,14 +127,16 @@ async function uploadInvitationToDrive(event: EventRow, svg: string) {
   const token = await tokenResponse.json();
   if (!tokenResponse.ok || !token.access_token) throw new Error("Google Drive menolak token. Periksa koneksi Google Drive.");
   const fileName = "Undangan-" + (event.event_title || event.name || "Acara")
-    .replace(/[^a-z0-9-_]+/gi, "-") + ".svg";
+    .replace(/[^a-z0-9-_]+/gi, "-") + ".png";
   const boundary = "uw_" + crypto.randomUUID().replaceAll("-", "");
-  const metadata = { name:fileName, mimeType:"image/svg+xml", parents:["1b5TmeQ16QWwWCTz6fCG5mIXw_hJ55B35"] };
-  const body = [
-    "--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n",
-    "--" + boundary + "\r\nContent-Type: image/svg+xml\r\n\r\n" + svg + "\r\n",
-    "--" + boundary + "--",
-  ].join("");
+  const metadata = { name:fileName, mimeType:"image/png", parents:["1b5TmeQ16QWwWCTz6fCG5mIXw_hJ55B35"] };
+  const encoder = new TextEncoder();
+  const head = encoder.encode("--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: image/png\r\n\r\n");
+  const tail = encoder.encode("\r\n--" + boundary + "--");
+  const body = new Uint8Array(head.length + png.length + tail.length);
+  body.set(head, 0);
+  body.set(png, head.length);
+  body.set(tail, head.length + png.length);
   const uploadResponse = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink", {
     method:"POST",
     headers:{ Authorization:"Bearer " + token.access_token, "Content-Type":"multipart/related; boundary=" + boundary },
@@ -265,7 +282,8 @@ Deno.serve(async (req) => {
       let driveUrl = "";
       try {
         const svg = await createInvitationSvg(event as EventRow);
-        driveUrl = await uploadInvitationToDrive(event as EventRow, svg);
+        const png = await renderInvitationPng(svg);
+        driveUrl = await uploadInvitationToDrive(event as EventRow, png);
         const { error:updateError } = await admin.from("invite_campaigns").update({ invitation_image_url:driveUrl }).eq("id", event.id);
         if (updateError) throw new Error("Gambar tersimpan di Drive tetapi tautannya gagal disimpan ke acara.");
       } catch (driveError) {
