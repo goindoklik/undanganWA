@@ -502,15 +502,28 @@ async function renderPublicInvitation() {
     : "Belum ditentukan";
   const ended = eventDate && eventDate.getTime() < Date.now();
   let imageUrl = "";
+  let previewUrl = "";
+  let downloadUrl = "";
   try {
     const parsed = new URL(event.invitation_image_url || "");
-    if (parsed.protocol === "https:") imageUrl = parsed.href;
+    if (parsed.protocol === "https:") {
+      imageUrl = parsed.href;
+      const driveId = parsed.hostname === "drive.google.com"
+        ? (parsed.pathname.match(/\\/file\\/d\\/([^/]+)/)?.[1] || parsed.searchParams.get("id"))
+        : null;
+      if (driveId) {
+        previewUrl = "https://drive.google.com/thumbnail?id=" + encodeURIComponent(driveId) + "&sz=w1600";
+        downloadUrl = "https://drive.google.com/uc?export=download&id=" + encodeURIComponent(driveId);
+      } else {
+        previewUrl = imageUrl;
+        downloadUrl = imageUrl;
+      }
+    }
   } catch {}
   const safe = value => esc(value || "-");
-  const previewUrl = imageUrl.replace(/([?&])export=download(?=&|$)/, "$1export=view");
-  const imageSection = imageUrl
-    ? '<div class="public-event-image-wrap"><img class="public-event-image" src="' + esc(previewUrl) + '" alt="Gambar undangan ' + safe(title) + '" loading="eager"></div>' +
-      '<a class="public-download-button" href="' + esc(imageUrl) + '" target="_blank" rel="noopener noreferrer" download>↓ &nbsp; Download Undangan</a>'
+  const imageSection = previewUrl
+    ? '<div class="public-event-image-wrap"><img class="public-event-image" src="' + esc(previewUrl) + '" alt="Gambar undangan ' + safe(title) + '" loading="eager" referrerpolicy="no-referrer" onerror="this.closest(\'.public-event-image-wrap\').innerHTML=\'<p class=&quot;public-event-no-image&quot;>Gambar undangan tidak dapat dimuat. Gunakan tombol download.</p>\'"></div>' +
+      '<a class="public-download-button" href="' + esc(downloadUrl) + '" target="_blank" rel="noopener noreferrer">↓ &nbsp; Download Undangan</a>'
     : '<div class="public-event-no-image">Gambar undangan belum tersedia.</div>';
   app.innerHTML =
     '<main class="public-event-page"><article class="public-event-card">' +
