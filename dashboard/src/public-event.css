@@ -1,6 +1,7 @@
 /* Halaman publik acara: hanya gambar undangan dan tombol download. Berlaku untuk semua acara. */
 html, body, #app { min-height: 100%; }
-body { margin: 0; background: #fff; }
+body { margin: 0; }
+.public-event-page, .public-event-loading { background: #fff; }
 .public-event-page {
   min-height: 100vh;
   padding: 0;
