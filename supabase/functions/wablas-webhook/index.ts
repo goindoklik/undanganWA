@@ -256,12 +256,22 @@ Deno.serve(async (req) => {
 
     if (state === "awaiting_download_choice" && (command === "y" || command === "n")) {
       const pending = Array.isArray(conversation?.pending_campaign_ids) ? conversation.pending_campaign_ids : [];
-      if (command === "y" && conversation?.campaign_id) {
-        const { data:event } = await admin.from("invite_campaigns").select("id,event_date").eq("id", conversation.campaign_id).maybeSingle();
-        if (event?.event_date) {
-          const url = "https://undanganwa.pages.dev/acara/" + slugForDate(event.event_date);
-          await sendWablas(phone, "Silahkan Download :\n\n" + url, "event-download-" + event.id);
+      if (command === "y") {
+        if (!conversation?.campaign_id) {
+          await sendWablas(phone, "Maaf, data acara yang dipilih tidak ditemukan. Silakan kirim Menu lalu pilih 1 kembali.", "event-download-missing-" + crypto.randomUUID());
+          await showNextEventChoice(admin, phone, pending);
+          return json({ accepted:true, command:"download_link_missing_campaign" });
         }
+        const { data:event, error:eventError } = await admin.from("invite_campaigns")
+          .select("id,event_date,is_active").eq("id", conversation.campaign_id).maybeSingle();
+        if (eventError || !event || !event.event_date || !event.is_active) {
+          await sendWablas(phone, "Maaf, data acara tidak dapat ditemukan atau sudah tidak aktif. Silakan kirim Menu lalu pilih 1 kembali.", "event-download-unavailable-" + crypto.randomUUID());
+          await showNextEventChoice(admin, phone, pending);
+          return json({ accepted:true, command:"download_link_unavailable" });
+        }
+        const url = "https://undanganwa.pages.dev/acara/" + slugForDate(event.event_date);
+        const downloadMessage = "Silahkan Download Undangan melalui tautan berikut:\n\n" + url;
+        await sendWablas(phone, downloadMessage, "event-download-" + event.id + "-" + crypto.randomUUID());
       } else {
         await sendWablas(phone, "Terima Kasih\n\nSelamat Melanjutkan Aktifitas Anda", "event-skip-" + crypto.randomUUID());
       }
