@@ -93,13 +93,14 @@ function eventStatus(event) {
 
 function eventsView(events) {
   return `<section class="panel">
-    <div class="panel-head"><div><h2>Data Acara</h2><p class="muted">Seluruh acara yang sudah dan akan berlangsung.</p></div><button class="primary compact" id="add-event">+ Tambah Acara</button></div>
-    <div id="event-form-wrap"></div><div id="event-invitation-wrap"></div>
-    ${events.length ? `<div class="table-wrap"><table><thead><tr><th>Nama Acara</th><th>Waktu Acara</th><th>Pukul</th><th>Tempat</th><th>Registrasi</th><th>Status</th><th>Aksi</th></tr></thead><tbody>
+    <div class="panel-head"><div><h2>Data Acara</h2><p class="muted">Tanggal acara dan gambar undangan final.</p></div><button class="primary compact" id="add-event">+ Tambah Acara</button></div>
+    <div id="event-form-wrap"></div>
+    ${events.length ? `<div class="table-wrap"><table><thead><tr><th>Tanggal Acara</th><th>Gambar Undangan</th><th>Registrasi</th><th>Status</th><th>Aksi</th></tr></thead><tbody>
     ${events.map(ev => {
       const d = ev.event_date ? new Date(ev.event_date) : null;
       const count = registrations.filter(r => r.campaign_id === ev.id).length;
-      return `<tr><td><b>${esc(ev.event_title || ev.name)}</b></td><td>${d ? d.toLocaleDateString("id-ID",{dateStyle:"long",timeZone:"Asia/Jakarta"}) : "-"}</td><td>${d ? d.toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Jakarta"})+" WIB" : "-"}</td><td>${esc(ev.venue || "-")}</td><td>${count} orang</td><td><span class="status">${eventStatus(ev)}</span></td><td><a class="outline compact event-page-link" href="/undangan/${eventSlug(ev.event_date)}" target="_blank" rel="noopener noreferrer">Halaman Acara</a> <button class="outline compact invitation-event" data-id="${ev.id}">Undangan</button> <button class="outline compact edit-event" data-id="${ev.id}">Edit</button> <button class="outline compact delete-event" data-id="${ev.id}">Hapus</button></td></tr>`;
+      const dateText = d ? d.toLocaleDateString("id-ID",{dateStyle:"long",timeZone:"Asia/Jakarta"}) : "-";
+      return `<tr><td><b>${dateText}</b></td><td>${ev.invitation_image_url ? '<a href="' + esc(ev.invitation_image_url) + '" target="_blank" rel="noopener noreferrer">Lihat gambar</a>' : '<span class="status cancelled">Belum diunggah</span>'}</td><td>${count} orang</td><td><span class="status">${eventStatus(ev)}</span></td><td><a class="outline compact event-page-link" href="/undangan/${eventSlug(ev.event_date)}" target="_blank" rel="noopener noreferrer">Halaman Acara</a> <button class="outline compact edit-event" data-id="${ev.id}">Edit</button> <button class="outline compact delete-event" data-id="${ev.id}">Hapus</button></td></tr>`;
     }).join("")}
     </tbody></table></div>` : '<div class="empty">Belum ada acara. Klik Tambah Acara untuk membuat acara pertama.</div>'}
   </section>`;
@@ -107,46 +108,116 @@ function eventsView(events) {
 
 function eventForm(event = null) {
   const editing = Boolean(event);
-  let day = "", time = "";
+  let day = "";
   if (event?.event_date) {
     const parts = new Intl.DateTimeFormat("en-CA", {timeZone:"Asia/Jakarta",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date(event.event_date));
     const get = k => parts.find(p => p.type === k)?.value || "";
     day = `${get("year")}-${get("month")}-${get("day")}`;
-    time = new Intl.DateTimeFormat("en-GB", {timeZone:"Asia/Jakarta",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(new Date(event.event_date));
   }
   return `<form id="event-form" class="panel" style="margin-bottom:18px">
-    <div class="panel-head"><div><h2>${editing ? "Edit Acara" : "Tambah Acara"}</h2><p class="muted">Isi informasi acara yang akan disimpan.</p></div><button type="button" class="outline compact" id="cancel-event">Batal</button></div>
-    <label>Nama Acara<input class="search" name="event_title" value="${esc(event?.event_title || event?.name || "")}" placeholder="Contoh: Gathering PilotX" required></label>
-    <div class="stats" style="grid-template-columns:repeat(2,minmax(0,1fr))">
-      <label>Waktu Acara<input class="search" type="date" name="event_date" value="${day}" required></label>
-      <label>Pukul<input class="search" type="time" name="event_time" value="${time}" required></label>
-    </div>
-    <label>Tempat<input class="search" name="venue" value="${esc(event?.venue || "")}" placeholder="Masukkan lokasi acara" required></label>
+    <div class="panel-head"><div><h2>${editing ? "Edit Acara" : "Tambah Acara"}</h2><p class="muted">Masukkan tanggal dan unggah gambar undangan final.</p></div><button type="button" class="outline compact" id="cancel-event">Batal</button></div>
+    <label>Tanggal Acara<input class="search" type="date" name="event_date" value="${day}" required></label>
+    <label>Upload Gambar<input class="search" type="file" name="invitation_image" accept="image/png,image/jpeg,image/webp" ${editing ? "" : "required"}></label>
+    ${editing && event?.invitation_image_url ? '<p class="muted tiny">Gambar undangan saat ini sudah tersimpan. Pilih file baru jika ingin menggantinya.</p>' : ""}
     <button class="primary" type="submit">${editing ? "Simpan Perubahan" : "Simpan Acara"}</button><div id="event-feedback"></div>
   </form>`;
 }
 
-async function saveEvent(e, eventId = null) {
-  e.preventDefault();
-  const fd = new FormData(e.currentTarget);
-  const event_title = String(fd.get("event_title") || "").trim();
-  const day = String(fd.get("event_date") || "");
-  const time = String(fd.get("event_time") || "");
-  const venue = String(fd.get("venue") || "").trim();
-  const feedback = document.querySelector("#event-feedback");
-  if (!event_title || !day || !time || !venue) return;
-  const event_date = new Date(`${day}T${time}:00+07:00`).toISOString();
-  const query = eventId
-    ? supabase.from("invite_campaigns").update({name:event_title,event_title,event_date,venue}).eq("id",eventId)
-    : supabase.from("invite_campaigns").insert({name:event_title,event_title,event_date,venue,is_active:true});
-  const { error } = await query;
-  if (error) {
-    feedback.innerHTML = '<div class="notice error">Acara gagal disimpan. Silakan coba kembali.</div>';
-    return;
-  }
-  await showView("events");
+async function imageFileToPngDataUrl(file) {
+  const source = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Gambar gagal dibaca."));
+    reader.readAsDataURL(file);
+  });
+  const image = await new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Format gambar tidak dapat dibuka."));
+    img.src = source;
+  });
+  const canvas = document.createElement("canvas");
+  const scale = Math.min(1, 2400 / Math.max(image.naturalWidth, image.naturalHeight));
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Browser tidak mendukung pemrosesan gambar.");
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/png");
 }
 
+async function saveEvent(e, eventId = null) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const fd = new FormData(form);
+  const day = String(fd.get("event_date") || "");
+  const file = fd.get("invitation_image");
+  const feedback = document.querySelector("#event-feedback");
+  const submit = form.querySelector('button[type="submit"]');
+  if (!day) return;
+  if (!eventId && !(file instanceof File && file.size)) {
+    feedback.innerHTML = '<div class="notice error">Pilih gambar undangan final terlebih dahulu.</div>';
+    return;
+  }
+  if (file instanceof File && file.size) {
+    if (!["image/png","image/jpeg","image/webp"].includes(file.type)) {
+      feedback.innerHTML = '<div class="notice error">Format gambar harus PNG, JPG, atau WEBP.</div>';
+      return;
+    }
+    if (file.size > 6 * 1024 * 1024) {
+      feedback.innerHTML = '<div class="notice error">Ukuran gambar maksimal 6 MB.</div>';
+      return;
+    }
+  }
+  submit.disabled = true;
+  submit.textContent = "Menyimpan...";
+  try {
+    // Gunakan pukul teknis tetap 12:00 WIB untuk membentuk tautan DDMMYYJJMM.
+    const event_date = new Date(day + "T12:00:00+07:00").toISOString();
+    let savedEvent;
+    if (eventId) {
+      const { data, error } = await supabase.from("invite_campaigns")
+        .update({ event_date }).eq("id", eventId)
+        .select("id,name,event_title,event_date,venue").single();
+      if (error) throw error;
+      savedEvent = data;
+    } else {
+      const { data, error } = await supabase.from("invite_campaigns")
+        .insert({ name:"Undangan Acara", event_title:"Undangan Acara", event_date, venue:null, is_active:true })
+        .select("id,name,event_title,event_date,venue").single();
+      if (error) throw error;
+      savedEvent = data;
+    }
+    if (file instanceof File && file.size) {
+      feedback.innerHTML = '<div class="muted">Mengunggah gambar undangan ke Google Drive...</div>';
+      const image_base64 = await imageFileToPngDataUrl(file);
+      const safeDate = day.replaceAll("-","");
+      const { data, error } = await supabase.functions.invoke("google-drive-upload", {
+        body: {
+          event_id:savedEvent.id,
+          file_name:"Undangan-" + safeDate + "-" + savedEvent.id.slice(0,8) + ".png",
+          image_base64
+        }
+      });
+      if (error || !data?.ok) {
+        let detail = data?.error || error?.message || "Upload ke Google Drive gagal.";
+        try {
+          if (error?.context?.clone) {
+            const responseBody = await error.context.clone().json();
+            if (responseBody?.error) detail = responseBody.error;
+          }
+        } catch {}
+        throw new Error(detail + " Data acara sudah dibuat; buka Edit untuk mengunggah ulang gambar.");
+      }
+    }
+    await showView("events");
+  } catch (error) {
+    console.error("Gagal menyimpan acara:", error);
+    feedback.innerHTML = '<div class="notice error">' + esc(error.message || "Acara gagal disimpan.") + '</div>';
+    submit.disabled = false;
+    submit.textContent = eventId ? "Simpan Perubahan" : "Simpan Acara";
+  }
+}
 
 function invitationDate(value) {
   return new Intl.DateTimeFormat("id-ID", { day:"numeric", month:"long", year:"numeric", timeZone:"Asia/Jakarta" }).format(new Date(value));
@@ -478,9 +549,6 @@ async function showView(view) {
         document.querySelector("#event-form").addEventListener("submit", e => saveEvent(e));
         document.querySelector("#cancel-event").onclick = () => document.querySelector("#event-form-wrap").innerHTML = "";
       };
-      document.querySelectorAll(".invitation-event").forEach(button => button.onclick = () => {
-        showEventInvitation(button.dataset.id);
-      });
       document.querySelectorAll(".edit-event").forEach(button => button.onclick = () => {
         const event = events.find(ev => ev.id === button.dataset.id);
         document.querySelector("#event-form-wrap").innerHTML = eventForm(event);
