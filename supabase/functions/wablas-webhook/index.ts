@@ -81,20 +81,32 @@ async function createInvitationSvg(event: EventRow) {
   const response = await fetch(templateUrl);
   if (!response.ok) throw new Error("Template gambar undangan tidak dapat diambil.");
   const template = bytesToBase64(new Uint8Array(await response.arrayBuffer()));
-  const venue = event.venue || "";
-  const venueLines = venue === "Rumah Makan GG Palasah" ? ["Rumah Makan", "GG Palasah"] : [venue];
-  const venueSvg = venueLines.length === 2
-    ? '<text x="741" y="738" font-size="19" text-anchor="start">' + escapeXml(venueLines[0]) + '</text><text x="741" y="762" font-size="19" text-anchor="start">' + escapeXml(venueLines[1]) + '</text>'
-    : '<text x="741" y="750" font-size="19" text-anchor="start">' + escapeXml(venue) + '</text>';
+  const venue = (event.venue || "").replace(/\\s+/g, " ").trim();
+  const venueWords = venue.split(" ");
+  const venueLines: string[] = [];
+  let venueLine = "";
+  for (const word of venueWords) {
+    const candidate = venueLine ? venueLine + " " + word : word;
+    if (candidate.length > 13 && venueLine) {
+      venueLines.push(venueLine);
+      venueLine = word;
+    } else {
+      venueLine = candidate;
+    }
+  }
+  if (venueLine) venueLines.push(venueLine);
+  const shownVenueLines = venueLines.slice(0, 2);
+  const venueSvg = shownVenueLines.map((line, index) =>
+    '<text x="741" y="' + (shownVenueLines.length === 1 ? 750 : 739 + index * 24) + '" font-size="17" text-anchor="start">' + escapeXml(line) + '</text>'
+  ).join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1024" height="1536" viewBox="0 0 1024 1536">
     <image x="0" y="0" width="1024" height="1536" xlink:href="data:image/png;base64,${template}"/>
-    <g fill="#fff" font-family="Poppins,Arial,sans-serif" font-weight="700" text-anchor="start" filter="url(#shadow)">
+    <g font-family="Arial,sans-serif" font-weight="700" text-anchor="start" fill="#fff" stroke="#17233b" stroke-width="1.5" stroke-linejoin="round" paint-order="stroke fill">
       <text x="167" y="735" font-size="19">${escapeXml(formatWeekday(event.event_date))}</text>
       <text x="167" y="765" font-size="18" font-weight="600">${escapeXml(formatDate(event.event_date))}</text>
       <text x="528" y="750" font-size="21" text-anchor="middle">${escapeXml(formatTime(event.event_date))}</text>
       ${venueSvg}
     </g>
-    <defs><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur in="SourceAlpha" stdDeviation="2"/><feOffset dx="0" dy="1" result="offset"/><feComponentTransfer><feFuncA type="linear" slope=".7"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
   </svg>`;
 }
 
