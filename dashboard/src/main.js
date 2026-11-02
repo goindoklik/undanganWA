@@ -250,10 +250,33 @@ async function showEventInvitation(eventId) {
   document.querySelector("#close-invitation").onclick = () => { wrap.innerHTML = ""; };
   try {
     const dataUrl = await buildInvitationDataUrl(event);
-    wrap.innerHTML = '<section class="panel invitation-panel"><div class="panel-head"><div><h2>Undangan Acara</h2><p class="muted">' + esc(event.event_title || event.name) + '</p></div><button type="button" class="outline compact" id="close-invitation">Tutup</button></div><div class="invitation-preview"><img id="invitation-image" alt="Gambar undangan acara"></div><div class="invitation-actions"><button type="button" class="primary" id="download-invitation">Download Gambar</button><button type="button" class="outline" id="share-invitation">Bagikan ke WhatsApp</button></div><p class="muted invitation-hint">Jika tombol bagikan tidak tersedia di perangkat, download gambar lalu lampirkan secara manual di WhatsApp.</p></section>';
+    wrap.innerHTML = '<section class="panel invitation-panel"><div class="panel-head"><div><h2>Undangan Acara</h2><p class="muted">' + esc(event.event_title || event.name) + '</p></div><button type="button" class="outline compact" id="close-invitation">Tutup</button></div><div class="invitation-preview"><img id="invitation-image" alt="Gambar undangan acara"></div><div class="invitation-actions"><button type="button" class="primary" id="save-drive-invitation">Simpan ke Google Drive</button><button type="button" class="outline" id="download-invitation">Download Gambar</button><button type="button" class="outline" id="share-invitation">Bagikan ke WhatsApp</button></div><p class="muted invitation-hint">File akan disimpan ke folder Google Drive PilotX/Undangan dan tautan publiknya diperbarui pada acara ini.</p><p class="muted invitation-hint">Jika tombol bagikan tidak tersedia di perangkat, download gambar lalu lampirkan secara manual di WhatsApp.</p></section>';
     const img = document.querySelector("#invitation-image");
     img.src = dataUrl;
     document.querySelector("#close-invitation").onclick = () => { wrap.innerHTML = ""; };
+    document.querySelector("#save-drive-invitation").onclick = async () => {
+      const button = document.querySelector("#save-drive-invitation");
+      button.disabled = true;
+      button.textContent = "Menyimpan ke Google Drive...";
+      try {
+        const { data, error } = await supabase.functions.invoke("google-drive-upload", {
+          body: {
+            event_id: event.id,
+            file_name: "Undangan-" + String(event.event_title || event.name || "Acara").replace(/[^a-z0-9-_]+/gi, "-") + ".png",
+            image_base64: dataUrl
+          }
+        });
+        if (error || !data?.ok) throw new Error(data?.error || error?.message || "Upload gagal.");
+        event.invitation_image_url = data.url;
+        alert("Undangan berhasil disimpan ke Google Drive/PilotX/Undangan. Tautan acara sudah diperbarui.");
+      } catch (error) {
+        console.error("Google Drive upload failed:", error);
+        alert(error.message || "Gagal menyimpan undangan ke Google Drive.");
+      } finally {
+        button.disabled = false;
+        button.textContent = "Simpan ke Google Drive";
+      }
+    };
     document.querySelector("#download-invitation").onclick = () => {
       const a = document.createElement("a");
       a.href = dataUrl;
